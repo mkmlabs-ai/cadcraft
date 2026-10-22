@@ -1,8 +1,10 @@
 //! CADCraft in the browser.
 //!
 //! Runs the same [`cadcraft_ui_egui::CadApp`] as the desktop app through eframe's web runner
-//! (wgpu: WebGPU where available, WebGL2 otherwise). Build with `trunk build --release` from this
-//! directory (output in `dist/web`). URL flags: `?webgl` forces WebGL2, `?cpu` draws the drawing
+//! (wgpu: WebGPU where the browser has a working hardware adapter, WebGL2 otherwise: with no adapter,
+//! a software one, or none answering within seconds, `probe_webgpu` sends it to WebGL2). Build with
+//! `trunk build --release` from this directory (output in `dist/web`). URL flags: `?webgl` forces
+//! WebGL2, `?webgpu` trusts the browser's WebGPU whatever the probe says, `?cpu` draws the drawing
 //! with egui shapes instead of the GPU canvas, `?sample` opens the sample drawing. Saving downloads
 //! the drawing through the browser (`download.rs`). With `?host=parent` (inside an `<iframe>`), a
 //! same-origin parent page sends the drawing to open and stores what CADCraft saves instead
@@ -106,10 +108,12 @@ mod web {
                 return;
             };
             let mut options = eframe::WebOptions::default();
-            if query().contains("webgl")
-                && let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup
-            {
-                create.instance_descriptor.backends = eframe::wgpu::Backends::GL;
+            let gpu = crate::probe_webgpu().await;
+            if crate::use_webgl(&query(), gpu) {
+                log::info!("using WebGL2 (WebGPU: {gpu:?})");
+                if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
+                    create.instance_descriptor.backends = eframe::wgpu::Backends::GL;
+                }
             }
             let result = eframe::WebRunner::new()
                 .start(
@@ -171,6 +175,69 @@ mod web {
     }
 }
 
+/// What the browser offers for WebGPU, found before eframe starts.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WebGpu {
+    /// `navigator.gpu` doesn't exist.
+    Missing,
+    /// No adapter, or none within [`PROBE_TIMEOUT_MS`] (a driver that never answers).
+    NoAdapter,
+    /// A fallback (software) adapter: wgpu gets a device from it that is lost at once, which
+    /// leaves a blank canvas.
+    Software,
+    Hardware,
+}
+
+/// How long the browser gets to answer `navigator.gpu.requestAdapter()`.
+#[cfg(target_arch = "wasm32")]
+const PROBE_TIMEOUT_MS: i32 = 3_000;
+
+/// True when the URL query has `flag` as a flag (`?webgl`, `?sample&webgl`, `?webgl=1`).
+#[cfg(any(target_arch = "wasm32", test))]
+fn has_flag(query: &str, flag: &str) -> bool {
+    query.trim_start_matches('?').split('&').any(|p| p == flag || p.strip_prefix(flag).is_some_and(|rest| rest.starts_with('=')))
+}
+
+/// Whether wgpu is held to WebGL2: `?webgl` says so, `?webgpu` says never, otherwise WebGPU is
+/// used only with a working hardware adapter.
+#[cfg(any(target_arch = "wasm32", test))]
+fn use_webgl(query: &str, gpu: WebGpu) -> bool {
+    if has_flag(query, "webgpu") {
+        return false;
+    }
+    has_flag(query, "webgl") || gpu != WebGpu::Hardware
+}
+
+/// Ask the browser for a WebGPU adapter the way wgpu will, without hanging on a driver that
+/// never answers. Never fails: anything unexpected counts as "no adapter".
+#[cfg(target_arch = "wasm32")]
+async fn probe_webgpu() -> WebGpu {
+    use wasm_bindgen::JsCast as _;
+    use wasm_bindgen::JsValue;
+    use web_sys::js_sys::{Array, Function, Promise, Reflect};
+
+    let get = |target: &JsValue, key: &str| Reflect::get(target, &JsValue::from_str(key)).unwrap_or(JsValue::UNDEFINED);
+    let Some(window) = web_sys::window() else { return WebGpu::Missing };
+    let gpu = get(window.navigator().as_ref(), "gpu");
+    if gpu.is_undefined() || gpu.is_null() {
+        return WebGpu::Missing;
+    }
+    let Ok(request) = get(&gpu, "requestAdapter").dyn_into::<Function>() else { return WebGpu::NoAdapter };
+    let Ok(request) = request.call0(&gpu) else { return WebGpu::NoAdapter };
+    let timeout = Promise::new(&mut |resolve: Function, _| {
+        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, PROBE_TIMEOUT_MS);
+    });
+    let answer = wasm_bindgen_futures::JsFuture::from(Promise::race(&Array::of2(&request, &timeout))).await;
+    let Ok(adapter) = answer else { return WebGpu::NoAdapter };
+    if !adapter.is_object() {
+        return WebGpu::NoAdapter; // null (none) or undefined (the timeout won)
+    }
+    // `isFallbackAdapter` moved from the adapter to its `info` in newer browsers.
+    let fallback = [adapter.clone(), get(&adapter, "info")].iter().any(|o| o.is_object() && get(o, "isFallbackAdapter").as_bool() == Some(true));
+    if fallback { WebGpu::Software } else { WebGpu::Hardware }
+}
+
 /// True when the URL query (`?cpu&sample`) has a `cpu` flag: the CPU canvas path is requested.
 #[cfg(any(target_arch = "wasm32", test))]
 fn wants_cpu(query: &str) -> bool {
@@ -192,7 +259,30 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::wants_cpu;
+    use super::{WebGpu, has_flag, use_webgl, wants_cpu};
+
+    #[test]
+    fn webgl_is_chosen_unless_there_is_a_working_hardware_adapter() {
+        for gpu in [WebGpu::Missing, WebGpu::NoAdapter, WebGpu::Software] {
+            assert!(use_webgl("?sample", gpu), "{gpu:?} falls back to WebGL2");
+            assert!(use_webgl("", gpu));
+        }
+        assert!(!use_webgl("?sample", WebGpu::Hardware));
+        assert!(use_webgl("?webgl", WebGpu::Hardware), "?webgl forces it");
+        assert!(use_webgl("?sample&webgl=1", WebGpu::Hardware));
+        assert!(!use_webgl("?webgpu", WebGpu::Software), "?webgpu trusts the browser");
+        assert!(!use_webgl("?webgl&webgpu", WebGpu::Hardware), "?webgpu wins");
+        assert!(!use_webgl("?webgpux", WebGpu::Hardware) && use_webgl("?webgpux", WebGpu::Software), "only whole flags count");
+    }
+
+    #[test]
+    fn flags_match_whole_names() {
+        assert!(has_flag("?webgl&sample", "webgl"));
+        assert!(has_flag("?sample&webgl", "webgl"));
+        assert!(!has_flag("?webglx", "webgl"));
+        assert!(!has_flag("?xwebgl", "webgl"));
+        assert!(!has_flag("", "webgl"));
+    }
 
     #[test]
     fn cpu_flag_is_detected() {

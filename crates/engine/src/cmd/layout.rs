@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             .noundo(),
         CommandSpec::new("exportpdf", "Export to PDF...", |s, p| run_plot(s, &super::plotters::plot_options(s, p, "exportpdf")?, "exportpdf"))
             .menu(&["File", "Export to PDF..."])
-            .params("{path? (else returns base64 `data`), layout?, paper?, landscape?, fit?, scale?, center?: bool (Model, default true), offset?: [x,y] mm (Model, when center is false; each within ±100000), lineweights?, plotTransparency?, plotArea?, window?} (as PLOT)")
+            .params("{path? (else returns base64 `data`; on the web the file is delivered to the host under the path's file name), layout?, paper?, landscape?, fit?, scale?, center?: bool (Model, default true), offset?: [x,y] mm (Model, when center is false; each within ±100000), lineweights?, plotTransparency?, plotArea?, window?} (as PLOT)")
             .noundo(),
         CommandSpec::new("mspace", "Model Space (in viewport)", run_mspace)
             .alias(&["ms"])
@@ -822,20 +822,46 @@ fn run_plot(s: &mut Session, p: &Value, cmd: &str) -> Result<Value> {
     };
     let pages = sheets.as_ref().map_or(1, Vec::len);
     match str_param(p, "path") {
-        Some(_path) => {
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                let path = _path;
-                let tmp = format!("{path}.cadcraft-tmp");
-                std::fs::write(&tmp, &bytes).map_err(|e| bad(cmd, format!("{path}: {e}")))?;
-                std::fs::rename(&tmp, path).map_err(|e| bad(cmd, format!("{path}: {e}")))?;
-                Ok(json!({ "path": path, "bytes": bytes.len(), "layout": layout, "pages": pages }))
-            }
-            #[cfg(target_arch = "wasm32")]
-            Err(bad(cmd, "paths are not available on the web; omit `path` to get the PDF as base64 `data`"))
-        }
+        Some(path) => store_plot(cmd, path, &bytes, &layout, pages),
         None => Ok(json!({ "data": base64_encode(&bytes), "bytes": bytes.len(), "layout": layout, "pages": pages })),
     }
+}
+
+/// Store a finished plot under `path`: a file on desktop; on the web, where paths mean nothing, the
+/// host's delivery hook gets it under the path's file name (a browser download, or `cadcraft:save`
+/// to the page that embeds the app).
+fn store_plot(cmd: &str, path: &str, bytes: &[u8], layout: &str, pages: usize) -> Result<Value> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let tmp = format!("{path}.cadcraft-tmp");
+        std::fs::write(&tmp, bytes).map_err(|e| bad(cmd, format!("{path}: {e}")))?;
+        std::fs::rename(&tmp, path).map_err(|e| bad(cmd, format!("{path}: {e}")))?;
+        Ok(json!({ "path": path, "bytes": bytes.len(), "layout": layout, "pages": pages }))
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let hook =
+            super::file::deliver().ok_or_else(|| bad(cmd, "files can't be written in this build; omit `path` to get the plot as base64 `data`"))?;
+        deliver_plot(cmd, path, bytes, layout, pages, hook)
+    }
+}
+
+/// Hand a plot to the host's delivery `hook` as `<file name of path>` with the MIME type its
+/// extension names. The result carries that name as `path`, like a file written on desktop.
+#[cfg(any(target_arch = "wasm32", test))]
+fn deliver_plot(cmd: &str, path: &str, bytes: &[u8], layout: &str, pages: usize, hook: super::file::DeliverHook) -> Result<Value> {
+    let name = super::file::file_name(path);
+    if name.trim().is_empty() {
+        return Err(bad(cmd, "a file name is required"));
+    }
+    let mime = match name.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase()).as_deref() {
+        Some("pdf") => "application/pdf",
+        Some("png") => "image/png",
+        Some("svg") => "image/svg+xml",
+        _ => "application/octet-stream",
+    };
+    hook(&name, mime, bytes).map_err(|e| bad(cmd, format!("{name}: {e}")))?;
+    Ok(json!({ "path": name, "bytes": bytes.len(), "layout": layout, "pages": pages, "delivered": true }))
 }
 
 /// The model-space rectangle a plot of `plotArea` covers: `extents` (default) plots everything,
@@ -878,6 +904,39 @@ fn plot_window(s: &Session, p: &Value, cmd: &str, space: &Space) -> Result<Optio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn web_plot_goes_through_the_delivery_hook_as_pdf() {
+        use std::sync::Mutex;
+        static GOT: Mutex<Vec<(String, String, Vec<u8>)>> = Mutex::new(Vec::new());
+        fn hook(name: &str, mime: &str, bytes: &[u8]) -> std::result::Result<(), String> {
+            GOT.lock().map_err(|e| e.to_string())?.push((name.into(), mime.into(), bytes.to_vec()));
+            Ok(())
+        }
+        fn refuse(_: &str, _: &str, _: &[u8]) -> std::result::Result<(), String> {
+            Err("the page that embeds CADCraft is gone".into())
+        }
+        let pdf = b"%PDF-1.7 test";
+        let r = deliver_plot("exportpdf", "Bracket.pdf", pdf, "Model", 1, hook).unwrap();
+        assert_eq!(r["path"], "Bracket.pdf");
+        assert_eq!(r["delivered"], true);
+        assert_eq!(r["bytes"], pdf.len());
+        {
+            let got = GOT.lock().unwrap();
+            assert_eq!(got.len(), 1);
+            assert_eq!((got[0].0.as_str(), got[0].1.as_str(), got[0].2.as_slice()), ("Bracket.pdf", "application/pdf", &pdf[..]));
+        }
+        // Only the file name is delivered; other outputs get their own MIME type.
+        deliver_plot("plot", "some/dir/Sheet A.PNG", b"x", "Layout1", 1, hook).unwrap();
+        deliver_plot("plot", "Sheet.svg", b"x", "Layout1", 1, hook).unwrap();
+        let got = GOT.lock().unwrap();
+        assert_eq!((got[1].0.as_str(), got[1].1.as_str()), ("Sheet A.PNG", "image/png"));
+        assert_eq!((got[2].0.as_str(), got[2].1.as_str()), ("Sheet.svg", "image/svg+xml"));
+        drop(got);
+        // A host that can't take the file, or no file name, is an error, never a panic.
+        assert!(deliver_plot("exportpdf", "Bracket.pdf", pdf, "Model", 1, refuse).is_err());
+        assert!(deliver_plot("exportpdf", "", pdf, "Model", 1, hook).is_err());
+    }
 
     fn session_with_model() -> Session {
         let mut s = Session::new();

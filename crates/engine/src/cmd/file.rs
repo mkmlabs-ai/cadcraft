@@ -246,7 +246,7 @@ fn run_new(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "index": i, "title": s.docs.get(i).map(|d| d.title.clone()) }))
 }
 
-fn file_name(path: &str) -> String {
+pub(super) fn file_name(path: &str) -> String {
     std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| path.to_string())
 }
 
