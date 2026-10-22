@@ -230,3 +230,96 @@ fn a_lazy_bridge_starts_without_the_app_and_says_how_to_open_it() {
     assert_ne!(r["result"]["isError"], json!(true), "{r}");
     app.join().unwrap();
 }
+
+/// The file-format hooks the hosts (CLI, app) install at start-up; the hooks are process-wide, so this is idempotent.
+fn install_io() {
+    use cadcraft_engine::cmd::file::{IoHooks, set_io, set_write_as};
+    set_io(IoHooks {
+        read: |b, name| cadcraft_io::read(b, name).map_err(|e| e.to_string()),
+        write: |d, name| cadcraft_io::write(d, name).map_err(|e| e.to_string()),
+        plot: Some(|d, space, opts| cadcraft_io::plotter::plot(d, space, opts).map_err(|e| e.to_string())),
+    });
+    set_write_as(|d, name, o| {
+        cadcraft_io::write_with(d, name, &cadcraft_io::SaveOptions { version: o.version, binary: o.binary }).map_err(|e| e.to_string())
+    });
+}
+
+/// A fresh scratch directory under the system temp dir.
+fn scratch(name: &str) -> std::path::PathBuf {
+    let d = std::env::temp_dir().join(format!("cadcraft-mcp-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    d
+}
+
+#[test]
+fn open_reads_dwg_and_plot_sheets_prints_each_layout_with_title_block_paper() {
+    install_io();
+    let dir = scratch("dwg");
+    let dwg = dir.join("house.dwg");
+    // Author a drawing with two sheets, save it as DWG, then open it in a fresh session.
+    let mut s = Server::new(Box::new(Headless::default()));
+    tool(&mut s, "new_drawing", json!({"metric": true}));
+    tool(&mut s, "script", json!({"text": "rectang 0,0 100,80\ncircle 50,40 20\n"}));
+    for (name, text) in [("B7", "FORMAT A3  SKALA 1:50"), ("B8", "Format: A4, skala 1:100")] {
+        tool(&mut s, "execute", json!({"command": "layout.new", "params": {"name": name}}));
+        tool(&mut s, "execute", json!({"command": "layout.set", "params": {"name": name}}));
+        tool(&mut s, "execute", json!({"command": "text", "params": {"at": [10, 10], "height": 3, "text": text}}));
+    }
+    tool(&mut s, "save", json!({"path": dwg.to_string_lossy()}));
+    assert!(std::fs::read(&dwg).unwrap().starts_with(b"AC10"), "a DWG file");
+
+    let mut s = Server::new(Box::new(Headless::default()));
+    let opened = tool(&mut s, "open", json!({"path": dwg.to_string_lossy()}));
+    assert!(opened["entities"].as_u64().unwrap_or(0) >= 2, "{opened}");
+    let d = tool(&mut s, "inspect_drawing", json!({}));
+    assert_eq!(d["counts"]["Circle"], 1, "{d}");
+
+    let out = dir.join("pdf");
+    let r = tool(&mut s, "plot_sheets", json!({"dir": out.to_string_lossy()}));
+    let sheets = r["sheets"].as_array().unwrap();
+    let printed: Vec<&Value> = sheets.iter().filter(|x| x.get("skipped").is_none()).collect();
+    assert_eq!(printed.len(), 2, "the empty default layouts are skipped: {r}");
+    assert_eq!(printed[0]["layout"], "B7");
+    assert_eq!(printed[0]["paper"], json!({"value": "A3", "source": "title block"}));
+    assert_eq!(printed[0]["scale"]["value"], "1:50");
+    assert_eq!(printed[1]["paper"]["value"], "A4");
+    assert_eq!(printed[1]["scale"]["value"], "1:100");
+    for p in &printed {
+        let bytes = std::fs::read(p["path"].as_str().unwrap()).unwrap();
+        assert!(bytes.starts_with(b"%PDF"), "{p}");
+    }
+    // A3 landscape is 1190.55 x 841.89 pt; A4 landscape 841.89 x 595.28.
+    let pdf = String::from_utf8_lossy(&std::fs::read(printed[0]["path"].as_str().unwrap()).unwrap()).to_string();
+    assert!(pdf.contains("/MediaBox [0 0 1190.551 841.89]"), "A3 sheet");
+    // Explicit values beat the title block, and the active layout is restored.
+    let r = tool(&mut s, "plot_sheets", json!({"dir": out.to_string_lossy(), "sheets": [{"layout": "B7", "paper": "A4"}]}));
+    assert_eq!(r["sheets"][0]["paper"], json!({"value": "A4", "source": "given"}));
+    let layouts = tool(&mut s, "execute", json!({"command": "layout", "params": {"option": "list"}}));
+    assert!(layouts.as_array().unwrap().iter().all(|l| l["current"] != json!(true)), "back on Model: {layouts}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn plot_sheets_rejects_unknown_layouts_and_hostile_input_without_panicking() {
+    install_io();
+    let dir = scratch("bad");
+    let mut s = Server::new(Box::new(Headless::default()));
+    let r = call(&mut s, 5, "tools/call", json!({"name": "plot_sheets", "arguments": {"dir": dir.to_string_lossy(), "layouts": ["Nope"]}}));
+    assert_eq!(r["result"]["isError"], json!(true), "{r}");
+    let r = call(&mut s, 6, "tools/call", json!({"name": "plot_sheets", "arguments": {}}));
+    assert!(r["error"].is_object(), "dir is required: {r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn title_block_reading() {
+    use crate::tools::{paper_in, scale_in};
+    assert_eq!(paper_in("FORMAT A3").as_deref(), Some("A3"));
+    assert_eq!(paper_in("a1 / 1:20").as_deref(), Some("A1"));
+    assert_eq!(paper_in("DATA3 A5 AB4"), None);
+    assert_eq!(scale_in("SKALA 1 : 50").as_deref(), Some("1:50"));
+    assert_eq!(scale_in("11:50"), None);
+    assert_eq!(scale_in("1:0"), None);
+    assert_eq!(scale_in("1:99999999999"), Some("1:9999999".into()));
+}

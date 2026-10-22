@@ -30,8 +30,13 @@ pub fn tool_definitions(has_ui: bool) -> Value {
                 "limit": {"type": "integer", "minimum": 0}, "offset": {"type": "integer", "minimum": 0}}}}),
         json!({"name": "new_drawing", "description": "Create a new drawing (imperial by default, or metric).",
             "inputSchema": {"type": "object", "properties": {"metric": {"type": "boolean"}}}}),
-        json!({"name": "open", "description": "Open a DXF file.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}),
+        json!({"name": "open", "description": "Open a DXF or DWG drawing (the format is recognised from the file's contents, not its extension). `warnings` in the reply lists what reading left out (DWG reading is partial).", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}),
         json!({"name": "save", "description": "Save the drawing (DXF or DWG by extension). A .svg, .png or .pdf path exports instead: the drawing keeps its name and unsaved changes.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}}}),
+        json!({"name": "plot_sheets", "description": "Print sheets (layouts) to one PDF each in `dir`, named `NN-<layout>.pdf`. Without `sheets`/`layouts` every non-empty layout is printed in tab order. The paper (A0-A4) and scale (1:N) come from the sheet's title block texts (e.g. `FORMAT A3`, `SKALA 1:50`) unless given; `detect:false` keeps each layout's own page setup. A given or detected scale is applied to Model prints only; for layouts it is reported as `scale` for checking against the viewports. Restores the active layout. Returns `sheets`: layout, path, bytes, pages, paper, scale and where each came from (`given`, `title block`, `page setup`).",
+            "inputSchema": {"type": "object", "properties": {"dir": {"type": "string"},
+                "layouts": {"type": "array", "items": {"type": "string"}},
+                "sheets": {"type": "array", "items": {"type": "object"}},
+                "detect": {"type": "boolean"}}, "required": ["dir"]}}),
         json!({"name": "cancel", "description": "Press Escape: cancel the running command (or clear the selection).", "inputSchema": {"type": "object", "properties": {}}}),
     ];
     if has_ui {
@@ -105,6 +110,168 @@ fn command_matches(c: &Value, f: &str) -> bool {
         || c["aliases"].as_array().is_some_and(|a| a.iter().filter_map(Value::as_str).any(has))
 }
 
+/// Most sheets one `plot_sheets` call prints.
+const MAX_SHEETS: usize = 200;
+/// Most title block texts read per sheet.
+const TITLE_TEXTS: u64 = 500;
+
+/// The paper (`A0`..`A4`) named by a text as a whole word, any case.
+pub(crate) fn paper_in(t: &str) -> Option<String> {
+    let c: Vec<char> = t.chars().collect();
+    (0..c.len()).find_map(|i| {
+        let (a, n) = (*c.get(i)?, *c.get(i + 1)?);
+        let word_start = i == 0 || c.get(i - 1).is_none_or(|p| !p.is_alphanumeric());
+        let word_end = c.get(i + 2).is_none_or(|p| !p.is_alphanumeric());
+        (a.eq_ignore_ascii_case(&'a') && ('0'..='4').contains(&n) && word_start && word_end).then(|| format!("A{n}"))
+    })
+}
+
+/// A scale `1:N` (spaces allowed around the colon) in a text, as `1:N`.
+pub(crate) fn scale_in(t: &str) -> Option<String> {
+    let c: Vec<char> = t.chars().collect();
+    (0..c.len()).find_map(|i| {
+        if *c.get(i)? != '1' || (i > 0 && c.get(i - 1).is_some_and(|p| p.is_alphanumeric() || *p == '.' || *p == ',')) {
+            return None;
+        }
+        let mut j = i + 1;
+        while c.get(j) == Some(&' ') {
+            j += 1;
+        }
+        if c.get(j) != Some(&':') {
+            return None;
+        }
+        j += 1;
+        while c.get(j) == Some(&' ') {
+            j += 1;
+        }
+        let digits: String = c.iter().skip(j).take_while(|d| d.is_ascii_digit()).take(7).collect();
+        let n: u32 = digits.parse().ok()?;
+        (n >= 1).then(|| format!("1:{n}"))
+    })
+}
+
+/// The paper and scale a sheet's texts name. A text mentioning `format`/`papier` decides the paper
+/// and one mentioning `skala`/`scale`/`sk.` the scale, before any other text does.
+fn title_block(texts: &[String]) -> (Option<String>, Option<String>) {
+    let low: Vec<String> = texts.iter().map(|t| t.to_lowercase()).collect();
+    let pick = |keys: &[&str], find: fn(&str) -> Option<String>| {
+        let keyed = texts.iter().zip(&low).filter(|(_, l)| keys.iter().any(|k| l.contains(k)));
+        keyed.filter_map(|(t, _)| find(t)).next().or_else(|| texts.iter().find_map(|t| find(t)))
+    };
+    (pick(&["format", "papier", "paper"], paper_in), pick(&["skala", "scale", "sk."], scale_in))
+}
+
+fn exec(b: &mut dyn Backend, command: &str, params: Value) -> Result<Value, String> {
+    b.call("engine.execute", json!({"command": command, "params": params}))
+}
+
+/// `plot_sheets`: one PDF per sheet, paper and scale from the sheet's title block.
+fn plot_sheets(b: &mut dyn Backend, a: &Value) -> Result<Value, String> {
+    let dir = a.get("dir").and_then(Value::as_str).ok_or("missing `dir`")?;
+    let detect = a.get("detect").and_then(Value::as_bool).unwrap_or(true);
+    std::fs::create_dir_all(dir).map_err(|e| format!("{dir}: {e}"))?;
+    let listed = exec(b, "layout", json!({"option": "list"}))?;
+    let mut layouts: Vec<(i64, String, bool, bool)> = listed
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|l| {
+            let name = l.get("name")?.as_str()?.to_string();
+            let has_vp = l.get("viewports").and_then(Value::as_array).is_some_and(|v| !v.is_empty());
+            Some((l.get("tabOrder").and_then(Value::as_i64).unwrap_or(0), name, l.get("current").and_then(Value::as_bool) == Some(true), has_vp))
+        })
+        .collect();
+    layouts.sort();
+    let was = layouts.iter().find(|l| l.2).map_or("Model".to_string(), |l| l.1.clone());
+    // (layout, paper, scale, landscape) as given; the sheets named explicitly are printed even when empty.
+    let mut want: Vec<(String, Option<String>, Option<String>, Option<bool>, bool)> = Vec::new();
+    if let Some(sheets) = a.get("sheets").and_then(Value::as_array) {
+        for sh in sheets {
+            let name = sh.get("layout").and_then(Value::as_str).ok_or("each of `sheets` needs a `layout`")?;
+            let s = |k: &str| sh.get(k).and_then(|v| v.as_str().map(str::to_string).or_else(|| v.as_f64().map(|f| f.to_string())));
+            want.push((name.to_string(), s("paper"), s("scale"), sh.get("landscape").and_then(Value::as_bool), true));
+        }
+    } else if let Some(names) = a.get("layouts").and_then(Value::as_array) {
+        for n in names.iter().filter_map(Value::as_str) {
+            want.push((n.to_string(), None, None, None, true));
+        }
+    } else {
+        want.extend(layouts.iter().map(|l| (l.1.clone(), None, None, None, false)));
+    }
+    if want.len() > MAX_SHEETS {
+        return Err(format!("at most {MAX_SHEETS} sheets can be printed at once"));
+    }
+    let mut out = Vec::new();
+    let mut failure = None;
+    for (i, (name, paper, scale, landscape, explicit)) in want.iter().enumerate() {
+        let model = name.eq_ignore_ascii_case("model");
+        let has_vp = layouts.iter().any(|l| l.1.eq_ignore_ascii_case(name) && l.3);
+        let (mut found_paper, mut found_scale) = (None, None);
+        let mut texts = 0;
+        if !model {
+            exec(b, "layout.set", json!({"name": name}))?;
+            let t = exec(b, "texts", json!({"limit": TITLE_TEXTS}))?;
+            let all: Vec<String> =
+                t.get("texts").and_then(Value::as_array).into_iter().flatten().filter_map(|x| x.get("text")?.as_str().map(str::to_string)).collect();
+            texts = all.len();
+            if detect {
+                (found_paper, found_scale) = title_block(&all);
+            }
+        }
+        if !model && !explicit && !has_vp && texts == 0 {
+            out.push(json!({"layout": name, "skipped": "empty layout"}));
+            continue;
+        }
+        let file = format!("{:02}-{}.pdf", i + 1, safe_name(name));
+        let path = std::path::Path::new(dir).join(file).to_string_lossy().to_string();
+        let mut q = json!({"layout": name, "path": path});
+        let (paper_used, paper_src) = match (paper, &found_paper) {
+            (Some(p), _) => (Some(p.clone()), "given"),
+            (None, Some(p)) => (Some(p.clone()), "title block"),
+            _ => (None, "page setup"),
+        };
+        let (scale_used, scale_src) = match (scale, &found_scale) {
+            (Some(s), _) => (Some(s.clone()), "given"),
+            (None, Some(s)) => (Some(s.clone()), "title block"),
+            _ => (None, "page setup"),
+        };
+        if let Some(p) = &paper_used {
+            q["paper"] = json!(p);
+        }
+        if let Some(l) = landscape {
+            q["landscape"] = json!(l);
+        }
+        if let (true, Some(s)) = (model, &scale_used) {
+            q["scale"] = json!(s);
+        }
+        match exec(b, "plot", q) {
+            Ok(mut r) => {
+                if let Some(o) = r.as_object_mut() {
+                    o.insert("layout".into(), json!(name));
+                    o.insert("paper".into(), json!({"value": paper_used, "source": paper_src}));
+                    o.insert("scale".into(), json!({"value": scale_used, "source": scale_src, "applied": model && scale_used.is_some()}));
+                }
+                out.push(r);
+            }
+            Err(e) => {
+                failure = Some(format!("{name}: {e}"));
+                break;
+            }
+        }
+    }
+    // Leave the drawing on the layout it was on, also after a failure.
+    exec(b, "layout.set", json!({"name": was}))?;
+    match failure {
+        Some(e) => Err(format!("{e} ({} sheet(s) printed before)", out.len())),
+        None => Ok(json!({"dir": dir, "sheets": out})),
+    }
+}
+
+/// A layout name made safe for a file name.
+fn safe_name(name: &str) -> String {
+    name.chars().map(|c| if c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.') { c } else { '_' }).collect()
+}
+
 /// Run a tool. `Err` is a protocol error (unknown tool, or arguments that don't fit its input
 /// schema), answered with JSON-RPC invalid params; a failing tool is an `isError` result.
 pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> Result<Value, String> {
@@ -129,6 +296,7 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> Result<Value,
         "new_drawing" => b.call("engine.execute", json!({"command": "new", "params": a})),
         "open" => b.call("app.open", a),
         "save" => b.call("app.save", a),
+        "plot_sheets" => plot_sheets(b, &a),
         "cancel" => b.call("cmdline.key", json!({"key": "escape"})),
         "screenshot" => b.call("ui.screenshot", a),
         "ui_inspect" => b.call("ui.inspect", json!({})),
