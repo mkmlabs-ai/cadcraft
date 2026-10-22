@@ -36,6 +36,7 @@
 	> Greater than	> Większe niż
 	A built-in table: editing it keeps an edited copy in the drawing.	Tabela wbudowana: edycja zapisuje zmienioną kopię w rysunku.
 	A drawing opened from a file keeps that file's format.	Rysunek otwarty z pliku zachowuje format tego pliku.
+	A recovery copy of the open drawing with unsaved changes was autosaved.	Kopia odzyskiwania otwartego rysunku z niezapisanymi zmianami została zapisana automatycznie.
 	A variable name starts with a letter and has only letters, digits and _	Nazwa zmiennej zaczyna się od litery i zawiera tylko litery, cyfry i _
 	About	O programie
 	About CADCraft	O programie CADCraft
@@ -65,6 +66,7 @@
 	An array that would create more objects than this is refused.	Szyk, który utworzyłby więcej obiektów, zostanie odrzucony.
 	Analyze Shapes	Analizuj kształty
 	Angle	Kąt
+	Angle tolerance (degrees)	Tolerancja kąta (stopnie)
 	Angular	Kątowy
 	Animation Effects	Efekty animacji
 	Animation effects	Efekty animacji
@@ -73,8 +75,10 @@
 	Annotative Object Scale	Skala obiektu opisowego
 	Annotative Update	Aktualizacja opisów
 	Apparent Intersection	Pozorne przecięcie
+	Appearance	Wygląd
 	Append to current selection set	Dołącz do bieżącego zbioru wskazań
 	Apply	Zastosuj
+	Apply changes to existing references	Zastosuj zmiany do istniejących odniesień
 	Apply to Layout	Zastosuj do arkusza
 	Apply to:	Zastosuj do:
 	Apply true color	Zastosuj kolor rzeczywisty
@@ -84,6 +88,7 @@
 	Arrange Panel	Rozmieść panel
 	Array	Szyk
 	Arrow size	Rozmiar strzałki
+	Arrowhead size	Rozmiar grotu strzałki
 	Associative	Skojarzony
 	Attach	Dołącz
 	Attach DWG...	Dołącz DWG...
@@ -98,6 +103,7 @@
 	Automatic save file location	Lokalizacja pliku autozapisu
 	Axis, End	Oś, koniec
 	B	B
+	Backwards	Wspak
 	Base	Baza
 	Baseline	Od bazy
 	Batch Publish	Publikacja wsadowa
@@ -108,11 +114,13 @@
 	Bind...	Powiąż...
 	Blend	Połącz krzywe
 	Block	Blok
+	Block Attribute Manager	Menedżer atrybutów bloków
 	Block Attribute Manager...	Menedżer atrybutów bloków...
 	Block Editor	Edytor bloków
 	Block Reference	Odniesienie bloku
 	Block to create or edit	Blok do utworzenia lub edycji
 	Block...	Blok...
+	Block:	Blok:
 	Blocks	Bloki
 	Blue	Niebieski
 	Bold	Pogrubienie
@@ -129,6 +137,7 @@
 	Break-line Symbol	Symbol linii przerwania
 	Bring Above Objects	Przenieś nad obiekty
 	Bring Annotations to Front	Przenieś opisy na wierzch
+	Bring every reference in line with these definitions	Dostosuj każde odniesienie do tych definicji
 	Bring to Front	Przenieś na wierzch
 	Bulleted list	Lista punktowana
 	ByBlock	JakBlok
@@ -136,11 +145,14 @@
 	ByLayer	JakWarstwa
 	CADCraft	CADCraft
 	CADCraft Help	Pomoc CADCraft
+	CADCraft did not close normally. These drawings were autosaved:	CADCraft nie został zamknięty prawidłowo. Te rysunki zapisano automatycznie:
+	CADCraft draws in the World Coordinate System; user coordinate systems aren't available yet.	CADCraft rysuje w światowym układzie współrzędnych; układy współrzędnych użytkownika nie są jeszcze dostępne.
 	CADCraft keeps these preferences, object snap modes and drafting toggles for your user account and restores them when it starts.	CADCraft zapisuje te preferencje, tryby lokalizacji obiektów i przełączniki kreślenia dla Twojego konta i przywraca je przy uruchomieniu.
 	Calibrate	Kalibruj
 	Calibrate 3D Mouse	Kalibruj mysz 3D
 	Cancel	Anuluj
 	Cartesian (x, y)	Kartezjańskie (x, y)
+	Cell margin	Margines komórki
 	Center	Środek
 	Center Line	Oś symetrii
 	Center Mark	Znacznik środka
@@ -148,6 +160,7 @@
 	Center Y	Środek Y
 	Center Z	Środek Z
 	Center the plot	Wyśrodkuj wydruk
+	Center the plotted model bounds on the printable area	Wyśrodkuj obwiednię drukowanego modelu na obszarze drukowania
 	Center, Diameter	Środek, średnica
 	Center, Radius	Środek, promień
 	Center, Start, Angle	Środek, początek, kąt
@@ -202,11 +215,15 @@
 	Commits	Commity
 	Company	Firma
 	Compare Drawings...	Porównaj rysunki...
+	Compass: view rotation isn't available in the 2D plan view yet	Kompas: obrót widoku nie jest jeszcze dostępny w widoku planu 2D
 	Computer-aided design and drafting: an open-source, clean-room CAD application written in pure Rust.	Komputerowe projektowanie i kreślenie: otwartoźródłowa aplikacja CAD typu clean-room, napisana w czystym Rust.
 	Concentric	Współśrodkowość
 	Cone	Stożek
+	Constant	Stały
 	Constraint Bars	Paski wiązań
 	Constraint Settings	Ustawienia wiązań
+	Constraint bar transparency (%)	Przezroczystość pasków ograniczeń (%)
+	Constraint types AUTOCONSTRAIN applies	Typy ograniczeń stosowane przez AUTOCONSTRAIN
 	Construction Line	Linia konstrukcyjna
 	Contents	Spis treści
 	Continue	Kontynuuj
@@ -216,6 +233,7 @@
 	Convert Text to Mtext	Konwertuj tekst na tekst wielowierszowy
 	Convert to Arc	Konwertuj na łuk
 	Convert to Line	Konwertuj na linię
+	Coordinate system	Układ współrzędnych
 	Copy	Kopiuj
 	Copy Full File Path	Kopiuj pełną ścieżkę pliku
 	Copy History	Kopiuj historię
@@ -233,9 +251,12 @@
 	Crosshair size	Rozmiar krzyża kursora
 	Crossing selection color:	Kolor wyboru przecięciem:
 	Ctrl+Enter to finish	Ctrl+Enter, aby zakończyć
+	Current	Bieżący
 	Current Scale Only	Tylko bieżąca skala
 	Current layer	Bieżąca warstwa
+	Current linetype: {current}	Bieżący rodzaj linii: {current}
 	Current selection	Bieżące zaznaczenie
+	Current style: {current}	Bieżący styl: {current}
 	Current: {color}	Bieżący: {color}
 	Curved	Zakrzywiony
 	Custom	Niestandardowy
@@ -277,6 +298,7 @@
 	Description	Opis
 	Deselect All	Odznacz wszystko
 	Detach	Odłącz
+	Details	Szczegóły
 	Diameter	Średnica
 	Dim scale overall	Ogólna skala wymiarów
 	Dim style	Styl wymiaru
@@ -289,17 +311,22 @@
 	Dimension Style...	Styl wymiarowania...
 	Dimension Text Edit	Edycja tekstu wymiaru
 	Dimension style	Styl wymiarowania
+	Dimensional	Wymiarowe
 	Dimensional Constraint	Wiązanie wymiarowe
 	Dimensional Constraint Parameters	Parametry wiązań wymiarowych
 	Dimensional Constraints	Wiązania wymiarowe
 	Disassociate Dimensions	Rozłącz wymiary
 	Discard	Odrzuć
+	Dismiss	Zamknij
 	Display	Wyświetlanie
 	Display name	Nazwa wyświetlana
 	Display plot styles	Wyświetlaj style wydruku
 	Distance	Odległość
+	Distance from the printable area's lower-left corner; values range from −100000 to 100000 mm	Odległość od lewego dolnego rogu obszaru drukowania; wartości od −100000 do 100000 mm
+	Distance tolerance	Tolerancja odległości
 	Divide	Podziel
 	Do not plot (click: plot)	Nie drukuj (kliknij: drukuj)
+	Don't Save	Nie zapisuj
 	Donut	Pierścień
 	Double-click to edit the description	Kliknij dwukrotnie, aby edytować opis
 	Down	W dół
@@ -309,11 +336,14 @@
 	Drag Dynamic Grip	Przeciągnij uchwyt dynamiczny
 	Draw	Rysuj
 	Draw Order	Kolejność wyświetlania
+	Draw new objects with the selected linetype	Rysuj nowe obiekty wybranym rodzajem linii
 	Drawing (DWG)	Rysunek (DWG)
 	Drawing (DXF)	Rysunek (DXF)
 	Drawing Limits	Granice rysunku
+	Drawing Recovery	Odzyskiwanie rysunków
 	Drawing Recovery Manager...	Menedżer odzyskiwania rysunków...
 	Drawing Template (DWT)	Szablon rysunku (DWT)
+	Drawing Units	Jednostki rysunku
 	Drawing Utilities	Narzędzia rysunku
 	Drawing as bytes	Rysunek jako bajty
 	Drawings (DWG, DXF)	Rysunki (DWG, DXF)
@@ -335,6 +365,7 @@
 	Edit Reference In-Place	Edytuj odniesienie w miejscu
 	Edit Table Cell	Edytuj komórkę tabeli
 	Edit Text...	Edytuj tekst...
+	Edit attribute {tag}	Edytuj atrybut {tag}
 	Edit…	Edytuj…
 	Elevation	Poziom
 	Ellipse	Elipsa
@@ -399,6 +430,7 @@
 	Erase	Wymaż
 	Evaluate	Oblicz
 	Evaluate LISP	Wykonaj LISP
+	Every library linetype is loaded.	Wszystkie rodzaje linii z biblioteki są wczytane.
 	Exclude from new selection set	Wyklucz z nowego zbioru wskazań
 	Exclude:	Wyklucz:
 	Explode	Rozbij
@@ -430,6 +462,7 @@
 	Fix	Ustalenie
 	Flatten Objects	Spłaszcz obiekty
 	Format	Format
+	Found in drawing: {refs}	Znaleziono w rysunku: {refs}
 	Freehand	Odręcznie
 	Freeze	Zamroź
 	Freeze Layer	Zamroź warstwę
@@ -438,8 +471,10 @@
 	Freeze/Thaw in all viewports	Zamroź/odmroź we wszystkich rzutniach
 	Freeze/Thaw in the current viewport	Zamroź/odmroź w bieżącej rzutni
 	From	Od
+	From File...	Z pliku...
 	From Template...	Z szablonu...
 	General	Ogólne
+	Geometric	Geometryczne
 	Geometric Center	Środek geometryczny
 	Geometric Constraint	Wiązanie geometryczne
 	Geometric Constraints	Wiązania geometryczne
@@ -448,10 +483,12 @@
 	Get View	Pobierz widok
 	Get from the Drawing	Pobierz z rysunku
 	Global	Globalny
+	Global scale factor	Globalny współczynnik skali
 	Global width	Szerokość globalna
 	Grab bag	Rozmaitości
 	Gradient	Gradient
 	Gradient...	Gradient...
+	Graphics error	Błąd grafiki
 	Grayscale	Skala szarości
 	Green	Zielony
 	Grid (F7)	Siatka (F7)
@@ -481,7 +518,9 @@
 	Hatch origin	Początek kreskowania
 	Hatch...	Kreskowanie...
 	Hatches	Kreskowania
+	Header row	Wiersz nagłówka
 	Height	Wysokość
+	Height (0 = ask)	Wysokość (0 = pytaj)
 	Height: {height}	Wysokość: {height}
 	Helix	Helisa
 	Help	Pomoc
@@ -495,9 +534,12 @@
 	Hide Others	Ukryj pozostałe
 	Hide Palette	Ukryj paletę
 	Hide Palettes	Ukryj palety
+	Hide UCS Icon	Ukryj ikonę UKW
+	Hide ViewCube	Ukryj ViewCube
 	History	Historia
 	Hold Shift to add to the selection	Przytrzymaj Shift, aby dodać do zaznaczenia
 	Home	Start
+	Home: zoom to the drawing extents	Początek: powiększ do zakresu rysunku
 	Horizontal	Poziomy
 	HorizontalDistance	Odległość pozioma
 	How to apply:	Sposób zastosowania:
@@ -513,6 +555,7 @@
 	Index color: {index}	Kolor indeksowany: {index}
 	Indicate selection area	Pokaż obszar wyboru
 	Infer Constraints	Wnioskuj wiązania
+	Infer geometric constraints	Wnioskuj ograniczenia geometryczne
 	Inquiry	Zapytania
 	Insert	Wstaw
 	Insert Block	Wstaw blok
@@ -525,6 +568,7 @@
 	Insertion X	Wstawienie X
 	Insertion Y	Wstawienie Y
 	Insertion Z	Wstawienie Z
+	Insertion scale	Skala wstawiania
 	Inspect Constraints	Sprawdź wiązania
 	Inspect Drawing	Sprawdź rysunek
 	Inspection	Inspekcja
@@ -536,6 +580,7 @@
 	Intersect	Część wspólna
 	Intersection	Przecięcie
 	Inverted	Odwrócony
+	Invisible	Niewidoczny
 	Island	Wyspa
 	Island detection	Wykrywanie wysp
 	Isolate	Izoluj
@@ -552,12 +597,16 @@
 	Join us on Discord	Dołącz do nas na Discordzie
 	Justify	Wyrównanie
 	Keep an editable copy of this table in the drawing	Zachowaj edytowalną kopię tej tabeli w rysunku
+	Keep the files and ask again next time	Zachowaj pliki i zapytaj ponownie następnym razem
 	Keep the system cursor visible over the drawing area	Pokazuj kursor systemowy nad obszarem rysunku
+	Landing gap	Odstęp półki
+	Landing length	Długość półki
 	Landscape	Pozioma
 	Language	Język
 	Largest array	Największy szyk
 	Last	Ostatni
 	Last commit	Ostatni commit
+	Later	Później
 	Layer	Warstwa
 	Layer Delete	Usuwanie warstwy
 	Layer Match	Dopasuj warstwę
@@ -597,6 +646,7 @@
 	Lines deleted	Usunięte wiersze
 	Lines of Command History	Wiersze historii poleceń
 	Linetype	Rodzaj linii
+	Linetype Manager	Menedżer rodzajów linii
 	Linetype Scale	Skala rodzaju linii
 	Linetype scale	Skala rodzaju linii
 	Linetype...	Rodzaj linii...
@@ -641,18 +691,24 @@
 	Mid Between 2 Points	Środek między 2 punktami
 	Midpoint	Punkt środkowy
 	Mirror	Lustro
+	Mode	Tryb
 	Model	Model
 	Model Space (in viewport)	Obszar modelu (w rzutni)
 	Model background	Tło modelu
+	Model-space offset placement is not supported by SVG	SVG nie obsługuje przesunięcia w przestrzeni modelu
 	Modeling	Modelowanie
 	Models	Modele
+	Modes	Tryby
 	Modify	Zmiana
 	More than {n} aliases.	Więcej niż {n} aliasów.
 	More toolbar commands	Więcej poleceń paska narzędzi
 	Move	Przesuń
+	Move Down	Przesuń w dół
+	Move Up	Przesuń w górę
 	Move sideways to pan; push/pull or twist to zoom.	Przesuń w bok, aby przesunąć widok; pchnij/pociągnij lub obróć, aby przybliżyć.
 	Move/Copy/Rotate	Przesuń/kopiuj/obróć
 	Multileader	Multiodnośnik
+	Multileader Style	Styl multiodnośnika
 	Multileader Style...	Styl multiodnośnika...
 	Multileader style	Styl multiodnośnika
 	Multiline	Multilinia
@@ -687,6 +743,7 @@
 	New layout	Nowy arkusz
 	New state name	Nazwa nowego stanu
 	New style	Nowy styl
+	New style name	Nazwa nowego stylu
 	Next Change	Następna zmiana
 	No	Nie
 	No alias file loaded. REINIT replaces these aliases with a file's.	Nie wczytano pliku aliasów. REINIT zastępuje te aliasy aliasami z pliku.
@@ -706,6 +763,7 @@
 	Not available	Niedostępne
 	Not available yet	Jeszcze niedostępne
 	Not loaded	Nie wczytano
+	Nothing needed autosaving.	Nic nie wymagało automatycznego zapisu.
 	Numbered list	Lista numerowana
 	OK	OK
 	Object	Obiekt
@@ -724,6 +782,7 @@
 	Oblique	Pochylony
 	Off	Wył.
 	Offset	Odsuń
+	Offsets must be within ±100000 mm	Przesunięcia muszą mieścić się w zakresie ±100000 mm
 	On	Wł.
 	On/Off	Wł./wył.
 	One of the Crafting Apps by the ArtCraft team and community.	Jedna z aplikacji Craft tworzonych przez zespół i społeczność ArtCraft.
@@ -739,6 +798,7 @@
 	Open in Block Editor	Otwórz w edytorze bloków
 	Open sample drawing	Otwórz rysunek przykładowy
 	Open...	Otwórz...
+	Opened drawings have no file name: save them to keep them.	Otwarte rysunki nie mają nazwy pliku: zapisz je, aby je zachować.
 	Operator:	Operator:
 	Opposite corner	Przeciwległy narożnik
 	Options	Opcje
@@ -758,9 +818,11 @@
 	Overline	Nadkreślenie
 	Override	Nadpisz
 	PAPER	PAPIER
+	PDF on the paper chosen below	PDF na papierze wybranym poniżej
 	PRs	PR-y
 	Page Setup Manager	Menedżer ustawień strony
 	Page Setup Manager...	Menedżer ustawień strony...
+	Page setup of {name}	Ustawienia strony: {name}
 	Pan	Przesuń widok
 	Pan Down	Przesuń widok w dół
 	Pan Left	Przesuń widok w lewo
@@ -769,6 +831,7 @@
 	Pan sensitivity	Czułość przesuwania
 	Paper Space	Obszar papieru
 	Paper size	Rozmiar papieru
+	Paper units per drawing unit, or a ratio such as 1:50	Jednostki papieru na jednostkę rysunku lub stosunek, np. 1:50
 	Parallel	Równoległość
 	Parameters Manager	Menedżer parametrów
 	Parametric	Parametryczne
@@ -780,6 +843,7 @@
 	Pattern	Wzór
 	Percent	Procent
 	Perpendicular	Prostopadłość
+	Pick the window's corners in the drawing	Wskaż narożniki okna na rysunku
 	Pickbox size	Rozmiar celownika
 	Plot	Drukuj
 	Plot (click: do not plot)	Drukuj (kliknij: nie drukuj)
@@ -791,17 +855,22 @@
 	Plot Window	Okno wydruku
 	Plot area	Obszar wydruku
 	Plot object lineweights	Drukuj szerokości linii obiektów
+	Plot objects with their transparency (PLOTTRANSPARENCYOVERRIDE can override it)	Drukuj obiekty z ich przezroczystością (PLOTTRANSPARENCYOVERRIDE może ją nadpisać)
 	Plot offset	Przesunięcie wydruku
 	Plot style	Styl wydruku
 	Plot style attached to	Styl wydruku dołączony do
 	Plot style table	Tabela stylów wydruku
 	Plot table type	Typ tabeli wydruku
 	Plot transparency	Drukuj przezroczystość
+	Plotted {target} ({bytes} bytes of PDF; there is no file dialog here)	Wydrukowano {target} ({bytes} B PDF; brak okna wyboru pliku)
+	Plotted {target} to {path}	Wydrukowano {target} do {path}
 	Plotter Manager	Menedżer ploterów
 	Plotter Manager...	Menedżer ploterów...
 	Plus/minus	Plus/minus
 	Point	Punkt
 	Point Filters	Filtry punktów
+	Point Size	Rozmiar punktu
+	Point Style	Styl punktu
 	Point Style...	Styl punktu...
 	Polar (distance < angle)	Biegunowe (odległość < kąt)
 	Polar Array	Szyk biegunowy
@@ -831,8 +900,10 @@
 	Print...	Drukuj...
 	Printer/plotter	Drukarka/ploter
 	Profiles	Profile
+	Prompt	Monit
 	Properties	Właściwości
 	Properties Inspector	Inspektor właściwości
+	Properties of {sel}	Właściwości: {sel}
 	Properties:	Właściwości:
 	Proxy	Proxy
 	Purge	Oczyść
@@ -861,6 +932,7 @@
 	Recent Commands	Ostatnie polecenia
 	Recent Input	Ostatnie wpisy
 	Recover...	Odzyskaj...
+	Recovery copies of {k} drawings with unsaved changes were autosaved.	Zapisano automatycznie kopie odzyskiwania {k} rysunków z niezapisanymi zmianami.
 	Rectangle	Prostokąt
 	Rectangular	Prostokątny
 	Rectangular Array	Szyk prostokątny
@@ -911,6 +983,7 @@
 	Run Script...	Uruchom skrypt...
 	S	S
 	SVG drawings (SVG, SVGZ)	Rysunki SVG (SVG, SVGZ)
+	Sample output	Przykładowy wynik
 	Save	Zapisz
 	Save (⌘S)	Zapisz (⌘S)
 	Save As	Zapisz jako
@@ -921,7 +994,10 @@
 	Save Reference Edits	Zapisz zmiany odniesienia
 	Save State	Zapisz stan
 	Save alias	Zapisz alias
+	Save changes to {title}?	Zapisać zmiany w {title}?
 	Save new drawings as	Zapisuj nowe rysunki jako
+	Save these settings in the layout's page setup	Zapisz te ustawienia w ustawieniach strony arkusza
+	Save your work and restart CADCraft. Recovery copies are offered at the next start if needed.	Zapisz pracę i uruchom CADCraft ponownie. Kopie odzyskiwania zostaną zaproponowane przy następnym uruchomieniu, jeśli będą potrzebne.
 	Saved Path	Zapisana ścieżka
 	Scale	Skala
 	Scale List...	Lista skal...
@@ -1022,6 +1098,8 @@
 	Set Dynamic Property	Ustaw właściwość dynamiczną
 	Set Layer Properties	Ustaw właściwości warstwy
 	Set Properties	Ustaw właściwości
+	Set Size Relative to Screen	Ustaw rozmiar względem ekranu
+	Set Size in Absolute Units	Ustaw rozmiar w jednostkach bezwzględnych
 	Set Table Cell	Ustaw komórkę tabeli
 	Set Table Cell Style	Ustaw styl komórki tabeli
 	Set Variable	Ustaw zmienną
@@ -1040,6 +1118,8 @@
 	Show System Cursor	Pokaż kursor systemowy
 	Show and hide the tools of this category	Pokaż i ukryj narzędzia tej kategorii
 	Show command prompting near the crosshairs	Pokazuj monity poleceń przy kursorze
+	Show constraint bars	Pokaż paski ograniczeń
+	Show dynamic constraints	Pokaż ograniczenia dynamiczne
 	Show grips	Pokazuj uchwyty
 	Show in Tool Sets	Pokaż w zestawach narzędzi
 	Show/Hide Lineweight	Pokaż/ukryj szerokość linii
@@ -1210,22 +1290,26 @@
 	Stretch	Rozciągnij
 	Stretch Vertex	Rozciągnij wierzchołek
 	Style: Standard	Styl: Standard
+	Styles	Style
 	Subtract	Różnica
 	Sweep	Przeciągnij po ścieżce
 	Switch Drawing	Przełącz rysunek
 	Switch Layout	Przełącz arkusz
 	Switch between model space in a viewport and paper space	Przełączaj między obszarem modelu w rzutni a obszarem papieru
 	Symmetric	Symetria
+	Sync	Synchronizuj
 	Synchronize Attributes	Synchronizuj atrybuty
 	Synchronize Multiple-scale Positions	Synchronizuj położenia dla wielu skal
 	TOP	GÓRA
 	Table	Tabela
 	Table Breaks	Podziały tabeli
 	Table Cell Style	Styl komórki tabeli
+	Table Style	Styl tabeli
 	Table Style...	Styl tabeli...
 	Table style	Styl tabeli
 	Table...	Tabela...
 	Tables	Tabele
+	Tag	Etykieta
 	Tan, Tan, Radius	Styczna, styczna, promień
 	Tan, Tan, Tan	Styczna, styczna, styczna
 	Tangent	Styczność
@@ -1234,6 +1318,7 @@
 	Text Editor	Edytor tekstu
 	Text Height	Wysokość tekstu
 	Text Objects Only	Tylko obiekty tekstowe
+	Text Style	Styl tekstu
 	Text Style...	Styl tekstu...
 	Text color	Kolor tekstu
 	Text height	Wysokość tekstu
@@ -1242,11 +1327,18 @@
 	Thaw All Layers	Odmroź wszystkie warstwy
 	Thaw Layer	Odmroź warstwę
 	The aperture is how near the cursor must come to a point for an object snap to find it.	Apertura określa, jak blisko punktu musi być kursor, aby lokalizacja obiektu go znalazła.
+	The graphics device stopped working (a driver reset or a GPU that stopped responding). CADCraft can't draw again until it restarts.	Urządzenie graficzne przestało działać (reset sterownika lub brak odpowiedzi procesora graficznego). CADCraft nie może rysować, dopóki nie zostanie uruchomiony ponownie.
+	The graphics driver reported an error ({count} times). CADCraft kept running, but the drawing may not display correctly.	Sterownik grafiki zgłosił błąd ({count} razy). CADCraft działa dalej, ale rysunek może wyświetlać się niepoprawnie.
+	The graphics driver reported an error. CADCraft kept running, but the drawing may not display correctly.	Sterownik grafiki zgłosił błąd. CADCraft działa dalej, ale rysunek może wyświetlać się niepoprawnie.
+	The sheet as these settings plot it	Arkusz w takiej postaci, w jakiej wydrukują go te ustawienia
 	There is nothing here yet.	Na razie nic tu nie ma.
 	Thickness	Grubość
 	This drawing	Ten rysunek
+	This drawing has no blocks with attributes.	Ten rysunek nie zawiera bloków z atrybutami.
+	This drawing has no layouts.	Ten rysunek nie ma arkuszy.
 	Time	Czas
 	Time-sensitive right-click: a quick click is Enter, holding opens the menu	Prawy przycisk zależny od czasu: szybkie kliknięcie to Enter, przytrzymanie otwiera menu
+	Title row	Wiersz tytułowy
 	To	Do
 	To get started, create or open a drawing.	Aby zacząć, utwórz lub otwórz rysunek.
 	Toggle PICKADD (off: each pick replaces the selection)	Przełącz PICKADD (wył.: każde wskazanie zastępuje zaznaczenie)
@@ -1257,6 +1349,7 @@
 	Tools	Narzędzia
 	Top left	Lewy górny
 	Top right	Prawy górny
+	Top: plan view of the drawing (zoom extents)	Góra: widok z góry rysunku (zoom zakres)
 	Torus	Torus
 	Trace	Ślad
 	Track orthogonally only	Śledź tylko ortogonalnie
@@ -1274,6 +1367,7 @@
 	Type an alias name.	Wpisz nazwę aliasu.
 	Type text; Enter starts a new paragraph	Wpisz tekst; Enter zaczyna nowy akapit
 	UCS Icon	Ikona LUW
+	UCS icon: World Coordinate System	Ikona UKW: światowy układ współrzędnych
 	Underline	Podkreślenie
 	Undo	Cofnij
 	Undo (⌘Z)	Cofnij (⌘Z)
@@ -1281,6 +1375,7 @@
 	Union	Suma
 	Unisolate Layer	Wyłącz izolowanie warstwy
 	Units Conversion	Konwersja jednostek
+	Units to scale inserted content	Jednostki skalowania wstawianej zawartości
 	Units...	Jednostki...
 	Unload	Wyładuj
 	Unloaded	Wyładowany
@@ -1294,6 +1389,7 @@
 	Up	W górę
 	Update	Aktualizuj
 	Update Data Links	Aktualizuj łącza danych
+	Upside down	Do góry nogami
 	Use System Setting	Użyj ustawienia systemowego
 	Use current origin	Użyj bieżącego początku
 	Use for this layout	Użyj dla tego arkusza
@@ -1342,6 +1438,7 @@
 	Wipeout	Maskowanie
 	Working Set	Zestaw roboczy
 	Workspace Switching	Przełączanie obszaru roboczego
+	World (WCS)	Świat (UKS)
 	Write Block	Zapisz blok do pliku
 	X	X
 	X offset (mm)	Przesunięcie X (mm)
@@ -1352,6 +1449,7 @@
 	Y offset (mm)	Przesunięcie Y (mm)
 	Yellow	Żółty
 	Yes	Tak
+	Your changes will be lost if you don't save them.	Zmiany zostaną utracone, jeśli ich nie zapiszesz.
 	Zoom	Zoom
 	Zoom All	Zoom wszystko
 	Zoom Dynamic	Zoom dynamiczny
@@ -1366,9 +1464,11 @@
 	built-in	wbudowany
 	contains authoring elements. Open in Block Editor?	zawiera elementy autorskie. Otworzyć w edytorze bloków?
 	error	błąd
+	landscape	pozioma
 	min	min
 	objects	obiektów
 	overrides built-in	nadpisuje wbudowany
+	units	jedn.
 	{alias} is already defined; select it and use Edit.	{alias} jest już zdefiniowany; zaznacz go i użyj Edytuj.
 	{command} is an unknown command.	{command} to nieznane polecenie.
 	{contributors} · {commits}	{contributors} · {commits}

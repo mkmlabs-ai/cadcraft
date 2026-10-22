@@ -94,7 +94,7 @@ fn render(app: &mut CadApp, ctx: &egui::Context) -> Result<(TextureHandle, Strin
     let tex = ctx.load_texture("plot-preview", egui::ColorImage::from_rgba_unmultiplied(size, img.as_raw()), egui::TextureOptions::LINEAR);
     let mut info = format!("{} · {}", r["layout"].as_str().unwrap_or(""), r["paper"].as_str().unwrap_or(""));
     if r["landscape"].as_bool() == Some(true) {
-        info.push_str(" · landscape");
+        info.push_str(&format!(" · {}", crate::tl!("landscape")));
     }
     Ok((tex, info))
 }
@@ -113,7 +113,7 @@ pub fn dialog(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) {
         }
     };
     let (mut close, mut print) = (false, false);
-    egui::Window::new("Plot Preview").open(open).collapsible(false).resizable(false).show(ctx, |ui| {
+    egui::Window::new(crate::tl!("Plot Preview")).id(egui::Id::new("Plot Preview")).open(open).collapsible(false).resizable(false).show(ctx, |ui| {
         match &preview.shown {
             Ok((tex, info)) => {
                 ui.label(info);
@@ -127,8 +127,8 @@ pub fn dialog(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) {
         }
         ui.add_space(4.0);
         ui.horizontal(|ui| {
-            print = ui.button("Print...").clicked();
-            close = ui.button("Close").clicked();
+            print = ui.button(crate::tl!("Print...")).clicked();
+            close = ui.button(crate::tl!("Close")).clicked();
         });
     });
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {

@@ -394,4 +394,6 @@ macro_rules! tf {
 }
 
 #[cfg(test)]
+mod coverage;
+#[cfg(test)]
 mod tests;

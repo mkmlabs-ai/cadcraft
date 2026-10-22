@@ -9,6 +9,8 @@
 	Attach DWG...	Приєднати DWG...
 	Bind	Вбудувати
 	Detach	Від'єднати
+	Drawing Units	Одиниці рисунка
+	Insertion scale	Масштаб вставлення
 	Loaded	Завантажено
 	Make it a block of this drawing, keeping its layer names	Зробити блоком цього креслення зі збереженням назв шарів
 	Make it a block of this drawing; its layers become NAME$0$LAYER	Зробити блоком цього креслення; його шари стануть NAME$0$LAYER
@@ -17,12 +19,15 @@
 	Not loaded	Не завантажено
 	Open	Відкрити
 	Overlay	Накладення
+	Precision	Точність
 	Reference Manager	Диспетчер посилань
 	Reference Name	Ім'я посилання
 	References: {n}	Посилань: {n}
 	Reload	Оновити
 	Reload All	Оновити всі
+	Sample output	Приклад результату
 	Saved Path	Збережений шлях
+	Units to scale inserted content	Одиниці для масштабування вставленого вмісту
 	Unload	Вивантажити
 	Unloaded	Вивантажено
 	Unreferenced	Без посилань

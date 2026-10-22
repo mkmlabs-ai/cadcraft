@@ -123,8 +123,9 @@ mod web {
                         // Embedded, the parent sends the drawing: start on the Start tab, not Drawing1.
                         let session = if app_bridge.is_some() { Session::empty() } else { Session::new() };
                         let mut app = CadApp::new(session, services());
-                        app.system_languages =
+                        let browser =
                             web_sys::window().map(|w| w.navigator().languages().iter().filter_map(|v| v.as_string()).collect()).unwrap_or_default();
+                        app.system_languages = crate::system_languages(query_param("lang").as_deref(), browser);
                         if let Some(profile) = cc.storage.and_then(|s| s.get_string(cadcraft_ui_egui::options::PROFILE_KEY)) {
                             app.load_profile(&profile);
                         }
@@ -238,6 +239,15 @@ async fn probe_webgpu() -> WebGpu {
     if fallback { WebGpu::Software } else { WebGpu::Hardware }
 }
 
+/// The languages the interface's "Auto" choice follows: the page's `?lang=pl` first (a host such as
+/// CoreCAD starts the editor in its own language whatever the browser says), then the browser's.
+/// A language chosen in Options still wins over both, and an unknown `lang` is ignored.
+#[cfg(any(target_arch = "wasm32", test))]
+fn system_languages(lang: Option<&str>, browser: Vec<String>) -> Vec<String> {
+    let host = lang.and_then(cadcraft_ui_egui::i18n::locale_language).map(str::to_string);
+    host.into_iter().chain(browser).collect()
+}
+
 /// True when the URL query (`?cpu&sample`) has a `cpu` flag: the CPU canvas path is requested.
 #[cfg(any(target_arch = "wasm32", test))]
 fn wants_cpu(query: &str) -> bool {
@@ -259,7 +269,27 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{WebGpu, has_flag, use_webgl, wants_cpu};
+    use super::{WebGpu, has_flag, system_languages, use_webgl, wants_cpu};
+    use cadcraft_ui_egui::i18n::Preference;
+
+    fn resolved(lang: Option<&str>, browser: &[&str]) -> &'static str {
+        let browser = browser.iter().map(|s| s.to_string()).collect();
+        Preference::Auto.resolve(&system_languages(lang, browser))
+    }
+
+    #[test]
+    fn lang_param_sets_the_automatic_language_whatever_the_browser_says() {
+        assert_eq!(resolved(Some("pl"), &["en-US", "en"]), "pl");
+        assert_eq!(resolved(Some("pl-PL"), &["de"]), "pl");
+        assert_eq!(resolved(Some("PL"), &[]), "pl");
+        assert_eq!(resolved(Some("de"), &["pl"]), "de", "the host's language is explicit");
+        assert_eq!(resolved(None, &["en-US", "pl"]), "en", "without ?lang the browser decides");
+        assert_eq!(resolved(None, &["pl-PL", "en"]), "pl");
+        assert_eq!(resolved(Some("xx"), &["pl"]), "pl", "an unknown ?lang is ignored");
+        assert_eq!(resolved(Some(""), &[]), "en");
+        // Options ▸ Language is not touched: only "Auto" follows the page.
+        assert_eq!(Preference::English.resolve(&system_languages(Some("pl"), Vec::new())), "en");
+    }
 
     #[test]
     fn webgl_is_chosen_unless_there_is_a_working_hardware_adapter() {
