@@ -4,9 +4,10 @@
 //! - `cadcraft:ready` (to the parent): `{ version }`, the app is listening; send a drawing now.
 //! - `cadcraft:open` (from the parent): `{ name, bytes }`, bytes an `ArrayBuffer` or
 //!   `Uint8Array`. It opens like a file picked with File › Open or dropped on the window.
-//! - `cadcraft:save` (to the parent): `{ name, bytes }` (a transferred `ArrayBuffer`) for every
+//! - `cadcraft:save` (to the parent): `{ name, bytes, label?, source? }` (a transferred `ArrayBuffer`) for every
 //!   file CADCraft would otherwise download (SAVE, SAVEAS, exports): it replaces the engine's
 //!   delivery hook. The parent stores the file and reports failures itself.
+//! - `cadcraft:checkpoint` (to the parent): `{ label? }` requesting a version checkpoint.
 //! - `cadcraft:dirty` (to the parent): `{ dirty }` whenever unsaved changes appear or go away.
 //! - `cadcraft:failed` (to the parent): `{ error }` when the app couldn't start.
 //!
@@ -104,12 +105,31 @@ impl Bridge {
     }
 
     fn post_save(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
+        self.post_save_with_meta(name, bytes, None, None)
+    }
+
+    pub fn post_save_with_meta(&self, name: &str, bytes: &[u8], label: Option<&str>, source: Option<&str>) -> Result<(), String> {
         let buffer = js_sys::Uint8Array::from(bytes).buffer();
-        let message = message(&[("type", "cadcraft:save".into()), ("name", name.into()), ("bytes", buffer.clone().into())])
-            .ok_or_else(|| "couldn't build the message".to_string())?;
+        let mut fields: Vec<(&str, JsValue)> = vec![
+            ("type", "cadcraft:save".into()),
+            ("name", name.into()),
+            ("bytes", buffer.clone().into()),
+        ];
+        if let Some(l) = label {
+            fields.push(("label", l.into()));
+        }
+        if let Some(s) = source {
+            fields.push(("source", s.into()));
+        }
+        let message = message(&fields).ok_or_else(|| "couldn't build the message".to_string())?;
         self.parent
             .post_message_with_transfer(&message, &self.origin, &js_sys::Array::of1(&buffer))
             .map_err(|e| e.as_string().unwrap_or_else(|| format!("{e:?}")))
+    }
+
+    #[allow(dead_code)]
+    pub fn post_checkpoint(&self, label: &str) -> bool {
+        self.send(&[("type", "cadcraft:checkpoint".into()), ("label", label.into())])
     }
 
     /// Post a message to the parent; false if it couldn't be sent.
@@ -123,6 +143,24 @@ impl Bridge {
 pub fn deliver(name: &str, _mime: &str, bytes: &[u8]) -> Result<(), String> {
     let bridge = BRIDGE.with(|b| b.borrow().clone()).ok_or("the page that embeds CADCraft is gone")?;
     bridge.post_save(name, bytes)
+}
+
+/// Request a version checkpoint on the parent page with a label.
+#[allow(dead_code)]
+pub fn checkpoint(label: &str) -> Result<(), String> {
+    let bridge = BRIDGE.with(|b| b.borrow().clone()).ok_or("the page that embeds CADCraft is gone")?;
+    if bridge.post_checkpoint(label) {
+        Ok(())
+    } else {
+        Err("couldn't send checkpoint to parent".to_string())
+    }
+}
+
+/// Hand the file with optional label and source to the parent page.
+#[allow(dead_code)]
+pub fn deliver_with_meta(name: &str, _mime: &str, bytes: &[u8], label: Option<&str>, source: Option<&str>) -> Result<(), String> {
+    let bridge = BRIDGE.with(|b| b.borrow().clone()).ok_or("the page that embeds CADCraft is gone")?;
+    bridge.post_save_with_meta(name, bytes, label, source)
 }
 
 fn message(fields: &[(&str, JsValue)]) -> Option<js_sys::Object> {
