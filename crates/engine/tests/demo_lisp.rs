@@ -13,7 +13,7 @@ fn test_demo_lisp_scripts() {
     let mut s = session();
 
     // 1. Load and test numeracja_pomieszczen.lsp
-    let num_lisp = include_str!("../../../../../demo/lisp/numeracja_pomieszczen.lsp");
+    let num_lisp = include_str!("fixtures/numeracja_pomieszczen.lsp");
     s.lisp_load("numeracja_pomieszczen.lsp", num_lisp, true).unwrap();
     assert!(!s.lisp_var("C:NUMERUJ").is_nil());
 
@@ -22,7 +22,7 @@ fn test_demo_lisp_scripts() {
     assert_eq!(s.doc().unwrap().model.len(), before + 1);
 
     // 2. Load and test tabliczka_rysunkowa.lsp
-    let tab_lisp = include_str!("../../../../../demo/lisp/tabliczka_rysunkowa.lsp");
+    let tab_lisp = include_str!("fixtures/tabliczka_rysunkowa.lsp");
     s.lisp_load("tabliczka_rysunkowa.lsp", tab_lisp, true).unwrap();
     assert!(!s.lisp_var("C:TABLICZKA").is_nil());
 
@@ -31,7 +31,7 @@ fn test_demo_lisp_scripts() {
     assert!(s.doc().unwrap().model.len() > before_tab + 10);
 
     // 3. Load and test suma_powierzchni.lsp
-    let area_lisp = include_str!("../../../../../demo/lisp/suma_powierzchni.lsp");
+    let area_lisp = include_str!("fixtures/suma_powierzchni.lsp");
     s.lisp_load("suma_powierzchni.lsp", area_lisp, true).unwrap();
     assert!(!s.lisp_var("C:SUMAPOW").is_nil());
 
@@ -40,14 +40,13 @@ fn test_demo_lisp_scripts() {
     let val = res.unwrap().unwrap();
     assert_eq!(val.as_number(), Some(100.0));
 
-    // Test on real demo house project
-    let dxf_bytes = include_bytes!("../../../../../demo/projects/dom-parterowy-110/dom-parterowy-110.dxf");
-    let doc = cadcraft_io::read(dxf_bytes, "dom-parterowy-110.dxf").unwrap();
+    // Test polyline room selection and summation on closed polylines (in mm -> m2)
     let mut s2 = session();
-    s2.open_drawing(doc, "dom-parterowy-110.dxf", None);
+    s2.cmdline("PLINE 0,0 10000,0 10000,10000 0,10000 C").unwrap();
+    s2.cmdline("PLINE 20000,0 25000,0 25000,5000 20000,5000 C").unwrap();
     s2.lisp_load("suma_powierzchni.lsp", area_lisp, true).unwrap();
     let area_res = s2.lisp_eval("(suma-powierzchni-ss (ssget \"X\" '((0 . \"LWPOLYLINE\"))))", false, true, Vec::new()).unwrap();
     let area_val = area_res.unwrap().unwrap();
     let area_num = area_val.as_number().unwrap();
-    assert!(area_num > 0.0, "Expected positive area for house polylines, got {area_num}");
+    assert_eq!(area_num, 125.0, "Expected area of 100 + 25 = 125 m2, got {area_num}");
 }
