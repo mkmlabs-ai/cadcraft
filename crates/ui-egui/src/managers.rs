@@ -1536,8 +1536,16 @@ mod plot_dialog_tests {
         });
         output.textures_delta.clear();
 
-        let st2 = temp::<PlotState>(&ctx, "plot_state").unwrap();
+        let mut st2 = temp::<PlotState>(&ctx, "plot_state").unwrap();
         assert!(st2.generating, "first frame after OK must set generating=true");
+        st2.generation = PLOT_GEN.load(Ordering::Relaxed);
+        set_temp(&ctx, "plot_state", st2);
+
+        cadcraft_engine::cmd::file::set_io(cadcraft_engine::cmd::file::IoHooks {
+            read: |_, _| Err("no reader".into()),
+            write: |_, _| Err("no writer".into()),
+            plot: Some(fake_plot_hook),
+        });
 
         let mut output2 = ctx.run_ui(raw, |_| {
             plot(&mut app, &ctx, &mut open);

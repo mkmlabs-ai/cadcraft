@@ -137,6 +137,8 @@ pub struct CanvasState {
     hover_cycle: Option<(Pos2, Vec<Handle>, usize)>,
     /// What the cycling list and the Shift+Space highlight were made for (see [`CycleKey`]).
     cycle_key: Option<CycleKey>,
+    /// Touch hold tracking for long-press context menu: (start_pos, start_time_ms, triggered).
+    pub touch_hold: Option<(Pos2, f64, bool)>,
 }
 
 /// The command, prompt, drawing (and its revision) and view that the objects under the cursor
@@ -1429,6 +1431,54 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
     {
         let _ = app.session.zoom_about(f64::from(zoom_pinch), xf.to_world(hp));
     }
+    // Multi-touch gestures (touch devices): two-finger pan and pinch zoom.
+    if inside && let Some(touch) = ui.input(|i| i.multi_touch()) {
+        if touch.translation_delta != egui::Vec2::ZERO
+            && let Ok(st) = app.session.state_mut()
+        {
+            let v = st.view();
+            st.set_view_quiet(cadcraft_engine::View {
+                center: v.center - Vec2::new(f64::from(touch.translation_delta.x) / scale, -f64::from(touch.translation_delta.y) / scale),
+                height: v.height,
+            });
+        }
+        if (touch.zoom_delta - 1.0).abs() > 1e-4 {
+            let about = xf.to_world(pos2(touch.center_pos.x, touch.center_pos.y));
+            let _ = app.session.zoom_about(f64::from(touch.zoom_delta), about);
+        }
+    }
+    // Long press on touch / primary hold (500 ms) opens the context menu.
+    let primary_down = ui.input(|i| i.pointer.primary_down());
+    let mut long_pressed = false;
+    if inside
+        && primary_down
+        && let Some(hp) = hover_pos
+    {
+        let now = crate::now_ms();
+        match &mut app.canvas.touch_hold {
+            Some((start_pos, start_time, triggered)) => {
+                if (*start_pos - hp).length() > 12.0 {
+                    app.canvas.touch_hold = None;
+                } else if !*triggered {
+                    if now - *start_time >= 500.0 {
+                        *triggered = true;
+                        long_pressed = true;
+                    } else {
+                        ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
+                    }
+                }
+            }
+            None => {
+                app.canvas.touch_hold = Some((hp, now, false));
+                ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
+            }
+        }
+    }
+    let long_press_consumed = app.canvas.touch_hold.as_ref().is_some_and(|(_, _, trig)| *trig);
+    if !primary_down {
+        app.canvas.touch_hold = None;
+    }
+    let pressed_primary = pressed_primary && !long_press_consumed;
     // Pan with the middle button (or Shift+right-drag / two-finger drag on trackpads is scroll).
     let middle_pressed = ui.input(|i| i.pointer.button_pressed(egui::PointerButton::Middle));
     let focused = ui.input(|i| i.focused);
@@ -1706,14 +1756,15 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
     // command menu); otherwise it opens the shortcut menu (Repeat, Clipboard, …).
     // Shift/Ctrl+right-click opens the object snap menu.
     let idle = !app.session.prompting();
-    if inside && pressed_secondary {
+    let sec_action = pressed_secondary || long_pressed;
+    if inside && sec_action {
         app.canvas.snap_menu = mods.shift || mods.ctrl;
     }
-    if crate::context_menu::in_command(app, ui, inside, pressed_secondary) {
+    if crate::context_menu::in_command(app, ui, inside, sec_action) {
         let _ = app.session.input(Input::Enter);
     }
-    // Right-click on a grip with options (polyline vertex, line end…) opens the grip menu.
-    if inside && pressed_secondary && idle && !app.canvas.snap_menu {
+    // Right-click or long-press on a grip with options opens the grip menu.
+    if inside && sec_action && idle && !app.canvas.snap_menu {
         app.canvas.grip_menu = grip_at(app, &xf, hover_pos).filter(|g| !grip_options(app, *g).is_empty());
     }
     crate::dyngrips::menu(app, ui.ctx(), &xf);

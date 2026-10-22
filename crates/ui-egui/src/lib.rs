@@ -49,6 +49,7 @@ pub mod viewcube;
 pub mod vpscale;
 
 pub mod exchange;
+pub mod mobile;
 
 use std::sync::mpsc::Receiver;
 
@@ -95,6 +96,8 @@ pub struct UiState {
     /// Show an in-window menu bar (platforms without a native menu bar, or on request).
     pub in_window_menu: bool,
     pub start_tab: bool,
+    /// Which mobile bottom sheet is currently open (compact mode only).
+    pub mobile_sheet: mobile::Sheet,
     pub dialog: Option<String>,
     pub history_lines: usize,
     /// Interface theme: "system" (follow the OS light/dark appearance), "light" or "dark".
@@ -173,6 +176,7 @@ impl Default for UiState {
             properties_all: true,
             in_window_menu: !cfg!(target_os = "macos"),
             start_tab: false,
+            mobile_sheet: mobile::Sheet::default(),
             dialog: None,
             history_lines: 3,
             theme: theme::ThemePref::default(),
@@ -630,6 +634,12 @@ impl CadApp {
 
     fn draw(&mut self, ui: &mut egui::Ui) {
         let t0 = now_ms();
+        // Compact (mobile) mode: full-screen drawing with bottom toolbar.
+        if mobile::is_compact(ui.ctx()) {
+            mobile::draw_compact(self, ui);
+            self.frame_ms = now_ms() - t0;
+            return;
+        }
         control::begin_frame(ui.ctx());
         let t = theme::Tokens::get();
         chrome::title_and_toolbar(self, ui);

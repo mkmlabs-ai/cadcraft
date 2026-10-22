@@ -208,7 +208,7 @@
 	Command	Polecenie
 	Command Aliases	Aliasy poleceń
 	Command History	Historia poleceń
-	Command Line	Wiersz poleceń
+	Command Line	Linia poleceń
 	Command Line History Lines	Liczba wierszy historii poleceń
 	Command Reference	Spis poleceń
 	Command line history	Historia wiersza poleceń
@@ -686,9 +686,10 @@
 	Make...	Utwórz...
 	Match Layer	Dopasuj warstwę
 	Match Properties	Dopasuj właściwości
-	Measure	Zmierz
+	Measure	Pomiar
 	Measure Distance	Zmierz odległość
 	Measure Geometry	Zmierz geometrię
+	Menu	Menu
 	Merge Cells	Scal komórki
 	Merged PRs	Scalone PR-y
 	Mid Between 2 Points	Środek między 2 punktami
@@ -702,7 +703,8 @@
 	Modeling	Modelowanie
 	Models	Modele
 	Modes	Tryby
-	Modify	Zmiana
+	Modify	Zmień
+	More	Więcej
 	More than {n} aliases.	Więcej niż {n} aliasów.
 	More toolbar commands	Więcej poleceń paska narzędzi
 	Move	Przesuń
@@ -1377,6 +1379,7 @@
 	Underline	Podkreślenie
 	Undo	Cofnij
 	Undo (⌘Z)	Cofnij (⌘Z)
+	Undo / Redo	Cofnij / Ponów
 	Ungroup	Rozgrupuj
 	Union	Suma
 	Unisolate Layer	Wyłącz izolowanie warstwy

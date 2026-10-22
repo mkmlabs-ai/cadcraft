@@ -16,7 +16,7 @@ pub mod patterns;
 /// The QuickCalc palette.
 pub mod quickcalc;
 
-type Tool = (Icon, &'static str, &'static str);
+pub type Tool = (Icon, &'static str, &'static str);
 
 /// Tool Sets groups: (name, large tools, small tools).
 pub const DRAFTING: &[(&str, &[Tool], &[Tool])] = &[
