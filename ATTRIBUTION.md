@@ -23,6 +23,8 @@ Generated-in-code assets are original and have no file to list:
 
 | Asset | Author | Source | Licence | Notes |
 |---|---|---|---|---|
+| `assets/fonts/OpenSans-Subset.ttf` | The Open Sans Project Authors | https://github.com/googlefonts/opensans | OFL-1.1 | Subset font covering Latin-1, Latin Extended-A and symbols |
+| `assets/fonts/OFL.txt` | SIL International | https://github.com/googlefonts/opensans | OFL-1.1 | SIL Open Font License text |
 | `assets/app-icon/hicolor/128x128/apps/ai.storyteller.cadcraft.png` | CADCraft contributors | generated from `assets/app-icon/cadcraft-1024.png` | MIT OR Apache-2.0 | Linux hicolor icon |
 | `assets/app-icon/hicolor/16x16/apps/ai.storyteller.cadcraft.png` | CADCraft contributors | generated from `assets/app-icon/cadcraft-1024.png` | MIT OR Apache-2.0 | Linux hicolor icon |
 | `assets/app-icon/hicolor/24x24/apps/ai.storyteller.cadcraft.png` | CADCraft contributors | generated from `assets/app-icon/cadcraft-1024.png` | MIT OR Apache-2.0 | Linux hicolor icon |
@@ -56,6 +58,8 @@ Generated-in-code assets are original and have no file to list:
 
 | Asset | Author | Source | Licence | Notes |
 |---|---|---|---|---|
+| `assets/fonts/OpenSans-Subset.ttf` | The Open Sans Project Authors | https://github.com/googlefonts/opensans | OFL-1.1 | Subset font covering Latin-1, Latin Extended-A and symbols |
+| `assets/fonts/OFL.txt` | SIL International | https://github.com/googlefonts/opensans | OFL-1.1 | SIL Open Font License text |
 | `crates/ui-egui/src/i18n/uk.tsv` | @dmatviichuk | Original Ukrainian translations of CADCraft English strings | MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`) | No proprietary localization resources copied |
 | `crates/ui-egui/src/i18n/de.tsv` | the CADCraft contributors | Original German translations of CADCraft English strings | MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`) | No proprietary localization resources copied |
 | `crates/ui-egui/src/i18n/es.tsv` | @PedroGuille | Original Spanish translations of CADCraft English strings | MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`) | No proprietary localization resources copied |

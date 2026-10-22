@@ -31,14 +31,14 @@ pub(crate) fn decoder(code_page: &str) -> Option<Decoder> {
     let name = code_page.trim().to_ascii_uppercase().replace(['-', ' '], "_");
     let enc = match name.as_str() {
         "UTF8" | "UTF_8" | "UNICODE" => return Some(Decoder::Utf8),
-        "ASCII" | "ANSI_1252" | "ISO8859_1" | "ISO_8859_1" => e::WINDOWS_1252,
+        "ASCII" | "ANSI_1252" | "1252" | "CP1252" | "CP_1252" | "WINDOWS_1252" | "WIN1252" | "ISO8859_1" | "ISO_8859_1" => e::WINDOWS_1252,
         "ANSI_874" => e::WINDOWS_874,
         "ANSI_932" | "DOS932" | "SHIFT_JIS" => e::SHIFT_JIS,
         "ANSI_936" | "GB2312" | "GBK" => e::GBK,
         "ANSI_949" | "KSC5601" | "KOREAN" => e::EUC_KR,
         "ANSI_950" | "BIG5" => e::BIG5,
-        "ANSI_1250" => e::WINDOWS_1250,
-        "ANSI_1251" => e::WINDOWS_1251,
+        "ANSI_1250" | "1250" | "CP1250" | "CP_1250" | "WINDOWS_1250" | "WIN1250" => e::WINDOWS_1250,
+        "ANSI_1251" | "1251" | "CP1251" | "CP_1251" | "WINDOWS_1251" | "WIN1251" => e::WINDOWS_1251,
         "ANSI_1253" => e::WINDOWS_1253,
         "ANSI_1254" | "ISO8859_9" | "ISO_8859_9" => e::WINDOWS_1254,
         "ANSI_1255" => e::WINDOWS_1255,
@@ -54,9 +54,9 @@ pub(crate) fn decoder(code_page: &str) -> Option<Decoder> {
         "ISO8859_8" | "ISO_8859_8" => e::ISO_8859_8,
         "DOS866" => e::IBM866,
         "MACINTOSH" | "MAC_ROMAN" => e::MACINTOSH,
-        "DOS437" => return Some(Decoder::Table(&DOS437)),
-        "DOS850" => return Some(Decoder::Table(&DOS850)),
-        "DOS852" => return Some(Decoder::Table(&DOS852)),
+        "DOS437" | "437" | "CP437" | "CP_437" => return Some(Decoder::Table(&DOS437)),
+        "DOS850" | "850" | "CP850" | "CP_850" => return Some(Decoder::Table(&DOS850)),
+        "DOS852" | "852" | "CP852" | "CP_852" => return Some(Decoder::Table(&DOS852)),
         _ => return None,
     };
     Some(Decoder::Encoding(enc))

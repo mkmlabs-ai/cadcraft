@@ -40,7 +40,7 @@ pub struct Run {
 
 /// Replace `%%` control codes: `%%d` degree, `%%p` plus/minus, `%%c` diameter, `%%%` percent,
 /// `%%nnn` character code. Underline/overline toggles (`%%u`, `%%o`) are returned as flags
-/// per character.
+/// per character. Also decodes `\U+XXXX` / `\u+XXXX` unicode escapes and `\~` non-breaking space.
 pub fn decode_controls(s: &str) -> Vec<(char, bool, bool)> {
     let mut out = Vec::with_capacity(s.len());
     let mut under = false;
@@ -72,6 +72,41 @@ pub fn decode_controls(s: &str) -> Vec<(char, bool, bool)> {
                 }
             }
             i += 3;
+            continue;
+        }
+        if c == '\\'
+            && matches!(chars.get(i + 1), Some(&'U' | &'u'))
+            && chars.get(i + 2) == Some(&'+')
+            && let Some(hex_slice) = chars.get(i + 3..i + 7)
+            && hex_slice.iter().all(|h| h.is_ascii_hexdigit())
+        {
+            let hex_s: String = hex_slice.iter().collect();
+            if let Ok(unit) = u32::from_str_radix(&hex_s, 16) {
+                // Check for surrogate pair
+                if (0xD800..0xDC00).contains(&unit)
+                    && chars.get(i + 7) == Some(&'\\')
+                    && matches!(chars.get(i + 8), Some(&'U' | &'u'))
+                    && chars.get(i + 9) == Some(&'+')
+                    && let Some(low_slice) = chars.get(i + 10..i + 14)
+                    && low_slice.iter().all(|h| h.is_ascii_hexdigit())
+                    && let Ok(low) = u32::from_str_radix(&low_slice.iter().collect::<String>(), 16)
+                    && (0xDC00..0xE000).contains(&low)
+                    && let Some(ch) = char::from_u32(0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00))
+                {
+                    out.push((ch, under, over));
+                    i += 14;
+                    continue;
+                }
+                if let Some(ch) = char::from_u32(unit) {
+                    out.push((ch, under, over));
+                    i += 7;
+                    continue;
+                }
+            }
+        }
+        if c == '\\' && chars.get(i + 1) == Some(&'~') {
+            out.push(('\u{a0}', under, over));
+            i += 2;
             continue;
         }
         out.push((c, under, over));
@@ -285,14 +320,20 @@ impl TextFont {
     /// can't find (an SHX file, a missing TTF), the FONTALT font ([`ttf::font_alt`]) when set;
     /// else the stroke font.
     pub fn resolve(name: &str) -> TextFont {
-        if let Some(f) = ttf::find(name) {
-            return TextFont::Outline(f);
-        }
         let n = name.trim();
-        if n.is_empty() || n.eq_ignore_ascii_case(BUILTIN_FONT) {
+        if ttf::is_stroke_name(n) {
             return TextFont::Stroke;
         }
-        ttf::find(&ttf::font_alt()).map(TextFont::Outline).unwrap_or(TextFont::Stroke)
+        if let Some(f) = ttf::find(n) {
+            return TextFont::Outline(f);
+        }
+        let alt = ttf::font_alt();
+        if !alt.is_empty()
+            && let Some(f) = ttf::find(&alt)
+        {
+            return TextFont::Outline(f);
+        }
+        TextFont::Stroke
     }
     pub fn is_outline(&self) -> bool {
         matches!(self, TextFont::Outline(_))
@@ -606,6 +647,51 @@ pub fn place_text(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn polish_characters_and_symbols_in_stroke_font() {
+        let text = "Zażółć gęślą jaźń ŻÓŁĆ 25,4 m² 35° ±0,00 Ø12 ³ × µ ≤ ·";
+        for c in text.chars().filter(|c| !c.is_whitespace()) {
+            assert!(stroke::glyph(c).is_some(), "stroke font lacks glyph for {c:?}");
+            let (w, spec) = stroke::glyph(c).unwrap();
+            assert!(w > 0.0);
+            assert!(!spec.is_empty());
+        }
+        let sh = shape_stroke(text, 1.0, 1.0, 0.0);
+        // Assert no missing glyph box (which is a 5-point box with width 4.0 * sc * wf and height h)
+        for st in &sh.strokes {
+            let is_box = st.len() == 5
+                && st.first() == st.last()
+                && (st[1].y - st[0].y).abs() < 1e-6
+                && (st[2].x - st[1].x).abs() < 1e-6
+                && (st[2].y - st[1].y - 1.0).abs() < 1e-6;
+            assert!(!is_box, "found missing glyph box in strokes!");
+        }
+    }
+
+    #[test]
+    fn polish_characters_and_symbols_in_outline_font() {
+        let text = "Zażółć gęślą jaźń ŻÓŁĆ 25,4 m² 35° ±0,00 Ø12 ³ × µ ≤ ·";
+        let font = TextFont::resolve("OpenSans-Regular");
+        assert!(font.is_outline(), "OpenSans must resolve to outline font");
+        let sh = shape_line(&font, text, 1.0, 1.0, 0.0);
+        assert!(!sh.glyphs.is_empty(), "outline glyphs must not be empty");
+        for tg in &sh.text {
+            assert!(tg.gid > 0, "glyph for {:?} was unmapped", tg.ch);
+        }
+    }
+
+    #[test]
+    fn polish_mtext_with_escapes_and_controls() {
+        let text = "Zażółć gęślą jaźń ŻÓŁĆ 25,4 m\\U+00B2 35%%d %%p0,00 %%c12";
+        let l = layout_mtext(text, Vec2::ZERO, 1.0, 0.0, 1, 0.0, 1.0);
+        assert!(!l.pieces.is_empty());
+        let plain = plain_mtext(text);
+        assert!(plain.contains('²'), "plain_mtext must decode \\U+00B2, got {plain}");
+        assert!(plain.contains('°'), "plain_mtext must decode %%d, got {plain}");
+        assert!(plain.contains('±'), "plain_mtext must decode %%p, got {plain}");
+        assert!(plain.contains('⌀'), "plain_mtext must decode %%c, got {plain}");
+    }
 
     #[test]
     fn every_ascii_printable_has_a_glyph() {

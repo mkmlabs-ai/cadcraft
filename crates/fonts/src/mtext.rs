@@ -6,6 +6,31 @@ use crate::{Shaped, TextFont, shape_line, text_width};
 
 pub(crate) mod para;
 
+fn decode_u_escape(chars: &[char], i: usize) -> Option<(char, usize)> {
+    if chars.get(i) != Some(&'+') {
+        return None;
+    }
+    let hex_slice = chars.get(i + 1..i + 5)?;
+    if !hex_slice.iter().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let hex_s: String = hex_slice.iter().collect();
+    let unit = u32::from_str_radix(&hex_s, 16).ok()?;
+    if (0xD800..0xDC00).contains(&unit)
+        && chars.get(i + 5) == Some(&'\\')
+        && matches!(chars.get(i + 6), Some(&'U' | &'u'))
+        && chars.get(i + 7) == Some(&'+')
+        && let Some(low_slice) = chars.get(i + 8..i + 12)
+        && low_slice.iter().all(|c| c.is_ascii_hexdigit())
+        && let Ok(low) = u32::from_str_radix(&low_slice.iter().collect::<String>(), 16)
+        && (0xDC00..0xE000).contains(&low)
+        && let Some(ch) = char::from_u32(0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00))
+    {
+        return Some((ch, 12));
+    }
+    char::from_u32(unit).map(|ch| (ch, 5))
+}
+
 /// Strip MTEXT formatting codes to plain text with `\n` paragraph breaks.
 /// Stacked fractions `\S1/2;` become `1/2`; `\~` is a space; braces are dropped.
 pub fn plain_mtext(s: &str) -> String {
@@ -13,6 +38,32 @@ pub fn plain_mtext(s: &str) -> String {
     let chars: Vec<char> = s.chars().collect();
     let mut i = 0;
     while let Some(&c) = chars.get(i) {
+        if c == '%' && chars.get(i + 1) == Some(&'%') {
+            let code = chars.get(i + 2).copied().unwrap_or(' ');
+            match code.to_ascii_lowercase() {
+                'd' => {
+                    out.push('°');
+                    i += 3;
+                    continue;
+                }
+                'p' => {
+                    out.push('±');
+                    i += 3;
+                    continue;
+                }
+                'c' => {
+                    out.push('⌀');
+                    i += 3;
+                    continue;
+                }
+                '%' => {
+                    out.push('%');
+                    i += 3;
+                    continue;
+                }
+                _ => {}
+            }
+        }
         match c {
             '\\' => {
                 let code = chars.get(i + 1).copied().unwrap_or(' ');
@@ -32,6 +83,14 @@ pub fn plain_mtext(s: &str) -> String {
                     '\\' | '{' | '}' => {
                         out.push(code);
                         i += 2;
+                    }
+                    'U' | 'u' if chars.get(i + 2) == Some(&'+') => {
+                        if let Some((ch, adv)) = decode_u_escape(&chars, i + 2) {
+                            out.push(ch);
+                            i += 2 + adv;
+                        } else {
+                            i += 2;
+                        }
                     }
                     'S' => {
                         // \Snum^den; \Snum/den; \Snum#den;
@@ -282,6 +341,13 @@ fn parse(contents: &str, base: Fmt) -> (Vec<Atom>, Vec<Fmt>) {
                     }
                     '~' => push_char(&mut word, '\u{a0}', cur),
                     '\\' | '{' | '}' => push_char(&mut word, code, cur),
+                    'U' | 'u' if chars.get(i) == Some(&'+') => {
+                        if let Some((ch, adv)) = decode_u_escape(&chars, i) {
+                            push_char(&mut word, ch, cur);
+                            i += adv;
+                            continue;
+                        }
+                    }
                     'L' => derive(&mut fmts, &mut cur, &|f| f.under = true),
                     'l' => derive(&mut fmts, &mut cur, &|f| f.under = false),
                     'O' => derive(&mut fmts, &mut cur, &|f| f.over = true),
@@ -396,6 +462,31 @@ fn parse(contents: &str, base: Fmt) -> (Vec<Atom>, Vec<Fmt>) {
                 end_word(&mut atoms, &mut word);
                 atoms.push(Atom::Space(cur));
                 i += 1;
+            }
+            '%' if chars.get(i + 1) == Some(&'%') => {
+                let code = chars.get(i + 2).copied().unwrap_or(' ');
+                match code.to_ascii_lowercase() {
+                    'd' => {
+                        push_char(&mut word, '°', cur);
+                        i += 3;
+                    }
+                    'p' => {
+                        push_char(&mut word, '±', cur);
+                        i += 3;
+                    }
+                    'c' => {
+                        push_char(&mut word, '⌀', cur);
+                        i += 3;
+                    }
+                    '%' => {
+                        push_char(&mut word, '%', cur);
+                        i += 3;
+                    }
+                    _ => {
+                        push_char(&mut word, '%', cur);
+                        i += 1;
+                    }
+                }
             }
             _ => {
                 push_char(&mut word, c, cur);

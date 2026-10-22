@@ -204,6 +204,8 @@ enum Source {
     Static(&'static [u8]),
 }
 
+static OPEN_SANS_SUBSET: &[u8] = include_bytes!("../../../assets/fonts/OpenSans-Subset.ttf");
+
 fn lock() -> MutexGuard<'static, Db> {
     static DB: OnceLock<Mutex<Db>> = OnceLock::new();
     let mut g = DB.get_or_init(|| Mutex::new(Db::default())).lock().unwrap_or_else(PoisonError::into_inner);
@@ -213,6 +215,14 @@ fn lock() -> MutexGuard<'static, Db> {
         // Embedded craft-fonts fonts take the place of an installed file with the same stem.
         for f in crate::CRAFT_FONTS {
             g.paths.insert(f.stem(), Source::Static(f.bytes));
+        }
+        // Universal OpenSans embedded subset font
+        for k in ["opensans", "opensans-regular", "opensansregular", "liberationsans", "liberationsans-regular", "liberationsansregular"] {
+            g.paths.entry(k.to_string()).or_insert(Source::Static(OPEN_SANS_SUBSET));
+        }
+        // Fallback aliases for common CAD document fonts on platforms without system fonts (WASM)
+        for k in ["arial", "arial-regular", "arialmt", "times", "timesnewroman", "courier", "couriernew", "verdana", "tahoma", "default"] {
+            g.paths.entry(k.to_string()).or_insert(Source::Static(OPEN_SANS_SUBSET));
         }
     }
     g
@@ -492,17 +502,18 @@ fn key(name: &str) -> String {
 }
 
 /// Names that mean a stroke font: never looked up as TrueType.
-fn is_stroke_name(k: &str) -> bool {
+pub(crate) fn is_stroke_name(name: &str) -> bool {
+    let k = key(name);
     k.is_empty() || k.ends_with(".shx") || k == crate::BUILTIN_FONT.to_ascii_lowercase() || k == "txt" || k == "simplex" || k == "romans"
 }
 
 /// A face of an installed (or registered) font by file name or family name. Stroke-font names
 /// (".shx", empty) return `None`.
 pub fn find(name: &str) -> Option<Face> {
-    let k = key(name);
-    if is_stroke_name(&k) {
+    if is_stroke_name(name) {
         return None;
     }
+    let k = key(name);
     let mut g = lock();
     if let Some(r) = g.resolved.get(&k) {
         return r.clone();
@@ -570,6 +581,16 @@ fn wants_fallback(c: char) -> bool {
     !(c.is_whitespace() || c.is_control() || (0xE000..=0xF8FF).contains(&u) || u >= 0xF_0000 || (u & 0xFFFE) == 0xFFFE)
 }
 
+fn symbol_alias(c: char) -> Option<char> {
+    match c {
+        '⌀' => Some('Ø'),
+        'Ø' => Some('⌀'),
+        'µ' => Some('μ'),
+        'μ' => Some('µ'),
+        _ => None,
+    }
+}
+
 /// A face that has `c`, for text whose own font lacks it: FONTFALLBACK fonts, then FONTALT,
 /// then installed fonts (wide-coverage CJK fonts first). Bounded and cached.
 pub fn fallback_for(c: char) -> Option<Face> {
@@ -585,9 +606,23 @@ pub fn fallback_for(c: char) -> Option<Face> {
             return Some(f);
         }
     }
+    if let Some(ac) = symbol_alias(c) {
+        for n in list.iter().chain(std::iter::once(&alt)) {
+            if let Some(f) = find(n).filter(|f| f.has_glyph(ac)) {
+                return Some(f);
+            }
+        }
+    }
     let mut g = lock();
-    let i = g.search_fallback(c)?;
-    g.fallback.faces.get(i).cloned()
+    if let Some(i) = g.search_fallback(c) {
+        return g.fallback.faces.get(i).cloned();
+    }
+    if let Some(ac) = symbol_alias(c)
+        && let Some(i) = g.search_fallback(ac)
+    {
+        return g.fallback.faces.get(i).cloned();
+    }
+    None
 }
 
 /// A glyph outline in font units (at 1000 units per em), flattened, plus its advance and the
@@ -742,7 +777,15 @@ fn outline(face: &Face, k: GlyphKey) -> Arc<GlyphOutline> {
 /// The outline of `c` from a fallback font, if any installed font has it.
 pub(crate) fn fallback_glyph(c: char) -> Option<Arc<GlyphOutline>> {
     let f = fallback_for(c)?;
-    Some(glyph(&f, c)).filter(|g| g.mapped)
+    if let Some(g) = Some(glyph(&f, c)).filter(|g| g.mapped) {
+        return Some(g);
+    }
+    if let Some(ac) = symbol_alias(c)
+        && let Some(g) = Some(glyph(&f, ac)).filter(|g| g.mapped)
+    {
+        return Some(g);
+    }
+    None
 }
 
 /// The glyph of `c` in `face`, or from a fallback font when `face` lacks it.
@@ -750,6 +793,12 @@ fn glyph_or_fallback(face: &Face, c: char) -> Arc<GlyphOutline> {
     let g = glyph(face, c);
     if g.mapped || c.is_whitespace() {
         return g;
+    }
+    if let Some(ac) = symbol_alias(c) {
+        let g2 = glyph(face, ac);
+        if g2.mapped {
+            return g2;
+        }
     }
     fallback_glyph(c).unwrap_or(g)
 }
