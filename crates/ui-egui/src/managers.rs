@@ -514,7 +514,7 @@ fn page_setup(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action 
                 let Some((_, name, page)) = layouts.iter().find(|l| l.1 == sel) else { return };
                 right.label(RichText::new(crate::tf!("Page setup of {name}", name = name)).strong());
                 // Layout plotting always prints the whole sheet, so only that area is offered.
-                let rows = PageRows { areas: &["layout"], scale: true, center: true };
+                let rows = PageRows { areas: &["layout"], scale: true, center: true, replaced_device: None };
                 egui::Grid::new("pagesetup_grid").num_columns(2).spacing(vec2(10.0, 6.0)).show(right, |ui| {
                     if let Some((k, v)) = page_rows(ui, egui::Id::new(("pagesetup", name)), page, &rows, &choices, None) {
                         action = Some(("pagesetup", json!({ "layout": name, k: v })));
@@ -534,6 +534,7 @@ struct PageRows {
     areas: &'static [&'static str],
     scale: bool,
     center: bool,
+    replaced_device: Option<String>,
 }
 
 /// The devices and plot style tables the page-setup rows offer.
@@ -593,6 +594,40 @@ fn parse_ratio(t: &str) -> Option<f64> {
     (v.is_finite() && v > 0.0).then_some(v)
 }
 
+fn paper_sort_key(name: &str) -> usize {
+    let lower = name.to_ascii_lowercase();
+    if lower.starts_with("iso a4") || lower == "a4" {
+        0
+    } else if lower.starts_with("iso a3") || lower == "a3" {
+        1
+    } else if lower.starts_with("iso a2") || lower == "a2" {
+        2
+    } else if lower.starts_with("iso a1") || lower == "a1" {
+        3
+    } else if lower.starts_with("iso a0") || lower == "a0" {
+        4
+    } else if lower.starts_with("iso a5") || lower == "a5" {
+        5
+    } else if lower.starts_with("iso a6") || lower == "a6" {
+        6
+    } else if lower.starts_with("iso b") {
+        7
+    } else {
+        8
+    }
+}
+
+fn paper_display_label(name: &str) -> String {
+    let mut s = name.to_string();
+    if s.contains(" MM)") {
+        s = s.replace(" MM)", " mm)");
+    }
+    if s.contains("Inches") {
+        s = s.replace("Inches", crate::tl!("Inches"));
+    }
+    s
+}
+
 /// The page-setup rows (device, paper, orientation, plot area, fit, scale, center, lineweights,
 /// transparency, plot style table) shared by the Page Setup Manager and the Plot dialog, inside a
 /// two-column grid. Returns the setting the user changed as a `pagesetup` parameter (`device`,
@@ -608,38 +643,47 @@ fn page_rows(
 ) -> Option<(&'static str, Value)> {
     let mut change = None;
     ui.label(crate::tl!("Printer/plotter"));
-    egui::ComboBox::from_id_salt(salt.with("device")).selected_text(crate::i18n::t(device_label(page))).width(190.0).show_ui(ui, |ui| {
-        if ui.selectable_label(device_label(page) == "None", crate::tl!("None")).on_hover_text(crate::tl!("PDF on the paper chosen below")).clicked()
-            && device_label(page) != "None"
-        {
-            change = Some(("device", json!("None")));
-        }
-        for dev in choices.devices.iter() {
-            let on = dev.name.eq_ignore_ascii_case(&page.device);
-            if ui.selectable_label(on, &dev.name).on_hover_text(format!("{} ({})", dev.description, dev.output.as_str().to_uppercase())).clicked()
-                && !on
+    ui.horizontal(|ui| {
+        egui::ComboBox::from_id_salt(salt.with("device")).selected_text(crate::i18n::t(device_label(page))).width(190.0).show_ui(ui, |ui| {
+            if ui
+                .selectable_label(device_label(page) == "None", crate::tl!("None"))
+                .on_hover_text(crate::tl!("PDF on the paper chosen below"))
+                .clicked()
+                && device_label(page) != "None"
             {
-                change = Some(("device", json!(dev.name)));
+                change = Some(("device", json!("None")));
             }
+            for dev in choices.devices.iter() {
+                let on = dev.name.eq_ignore_ascii_case(&page.device);
+                let desc = match dev.description.as_str() {
+                    "Vector PDF" => crate::tl!("Vector PDF"),
+                    "Raster PNG image" => crate::tl!("Raster PNG image"),
+                    "Vector SVG image" => crate::tl!("Vector SVG image"),
+                    other => other,
+                };
+                if ui.selectable_label(on, &dev.name).on_hover_text(format!("{} ({})", desc, dev.output.as_str().to_uppercase())).clicked() && !on {
+                    change = Some(("device", json!(dev.name)));
+                }
+            }
+        });
+        if let Some(orig) = &rows.replaced_device {
+            ui.label(RichText::new(crate::tf!("Replaced: {name}", name = orig)).color(egui::Color32::from_rgb(220, 100, 40)));
         }
     });
     ui.end_row();
     // The device's papers, else the standard sizes.
     let device = choices.devices.iter().find(|dv| dv.name.eq_ignore_ascii_case(&page.device));
     ui.label(crate::tl!("Paper size"));
-    egui::ComboBox::from_id_salt(salt.with("paper")).selected_text(page.paper.as_str()).width(190.0).show_ui(ui, |ui| match device {
-        Some(dev) => {
-            for p in &dev.papers {
-                if ui.selectable_label(p.name == page.paper, &p.name).clicked() && p.name != page.paper {
-                    change = Some(("paper", json!(p.name)));
-                }
-            }
-        }
-        None => {
-            for p in cadcraft_render::PAPER_SIZES {
-                if ui.selectable_label(p.name == page.paper, p.name).clicked() && p.name != page.paper {
-                    change = Some(("paper", json!(p.name)));
-                }
+    egui::ComboBox::from_id_salt(salt.with("paper")).selected_text(paper_display_label(page.paper.as_str())).width(190.0).show_ui(ui, |ui| {
+        let mut papers: Vec<String> = match device {
+            Some(dev) => dev.papers.iter().map(|p| p.name.clone()).collect(),
+            None => cadcraft_render::PAPER_SIZES.iter().map(|p| p.name.to_string()).collect(),
+        };
+        papers.sort_by_key(|p| (paper_sort_key(p), p.clone()));
+        for name in papers {
+            let label = paper_display_label(&name);
+            if ui.selectable_label(name == page.paper, &label).clicked() && name != page.paper {
+                change = Some(("paper", json!(name)));
             }
         }
     });
@@ -828,6 +872,9 @@ struct PlotState {
     /// Model-space placement; stays outside PageSetup so layouts keep their existing behavior.
     center: bool,
     offset_mm: [f64; 2],
+    replaced_device: Option<String>,
+    generating: bool,
+    error: Option<String>,
 }
 
 /// The page setup a plot of `target` starts from: the layout's, or model-space defaults (fitted
@@ -838,7 +885,7 @@ fn plot_page(d: &cadcraft_doc::Drawing, target: &str) -> cadcraft_doc::PageSetup
         page.plot_area = "layout".into();
         return page;
     }
-    let mut page = cadcraft_doc::PageSetup { plot_area: "extents".into(), scale_to_fit: true, ..Default::default() };
+    let mut page = cadcraft_doc::PageSetup { plot_area: "extents".into(), scale_to_fit: true, device: "CADCraft PDF".into(), ..Default::default() };
     if cadcraft_render::paper::paper_unit_mm(d) == 1.0
         && let Some(a4) = cadcraft_render::paper_size("A4")
     {
@@ -847,6 +894,41 @@ fn plot_page(d: &cadcraft_doc::Drawing, target: &str) -> cadcraft_doc::PageSetup
         page.height_mm = a4.height_mm;
     }
     page
+}
+
+fn resolve_plot_page(d: &cadcraft_doc::Drawing, target: &str, choices: &PageChoices) -> (cadcraft_doc::PageSetup, Option<String>) {
+    let mut page = plot_page(d, target);
+    let orig = page.device.trim().to_string();
+    let is_known = choices.devices.iter().any(|dev| dev.name.eq_ignore_ascii_case(&orig));
+    let mut replaced = None;
+    if !is_known {
+        if !orig.is_empty() && !orig.eq_ignore_ascii_case("None") && !orig.eq_ignore_ascii_case("Brak") {
+            replaced = Some(orig);
+        }
+        page.device = "CADCraft PDF".into();
+    }
+    (page, replaced)
+}
+
+fn format_plot_error(err: &str) -> String {
+    let msg = err
+        .strip_prefix("invalid parameters for `plot`: ")
+        .or_else(|| err.strip_prefix("invalid parameters for 'plot': "))
+        .or_else(|| err.strip_prefix("invalid parameters for `exportpdf`: "))
+        .or_else(|| err.strip_prefix("invalid parameters for 'exportpdf': "))
+        .unwrap_or(err);
+    if let Some(rest) = msg.strip_prefix("unknown plotter `")
+        && let Some((name, _)) = rest.split_once('`')
+    {
+        return crate::tf!("Unknown plotter: {name}", name = name);
+    }
+    if let Some(rest) = msg.strip_prefix("unknown plotter \"")
+        && let Some((name, _)) = rest.split_once('"')
+    {
+        return crate::tf!("Unknown plotter: {name}", name = name);
+    }
+    let translated = crate::i18n::t(msg);
+    if translated != msg { format!("{}: {}", crate::tl!("Error"), translated) } else { format!("{}: {}", crate::tl!("Error"), msg) }
 }
 
 /// The `plot` parameters for the dialog's settings (without the output path). `preview_dpi`
@@ -923,23 +1005,27 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
     layouts.sort_by_key(|l| l.0);
     targets.extend(layouts.into_iter().map(|l| l.1));
     let generation = PLOT_GEN.load(Ordering::Relaxed);
+    let choices = PageChoices::new(ctx, d);
     let mut st = temp::<PlotState>(ctx, "plot_state").filter(|s| s.generation == generation && targets.contains(&s.target)).unwrap_or_else(|| {
         let target = app.session.layout_space().tab_name().to_string();
         let mut ext = d.extents(&cadcraft_doc::Space::Model);
         if ext.is_empty() {
             ext = cadcraft_geom::Bounds2::new(cadcraft_geom::Vec2::ZERO, cadcraft_geom::Vec2::new(12.0, 9.0));
         }
+        let (page, replaced) = resolve_plot_page(d, &target, &choices);
         PlotState {
             generation,
-            page: plot_page(d, &target),
+            page,
             target,
             window: [ext.min.x, ext.min.y, ext.max.x, ext.max.y],
             center: true,
             offset_mm: [0.0, 0.0],
+            replaced_device: replaced,
+            generating: false,
+            error: None,
         }
     });
     let model = st.target == "Model";
-    let choices = PageChoices::new(ctx, d);
     let offset_supported =
         choices.devices.iter().find(|dev| dev.name.eq_ignore_ascii_case(&st.page.device)).is_none_or(|dev| dev.output.as_str() != "svg");
     // Print... in a preview opened from here plots with these settings.
@@ -947,6 +1033,11 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
     set_temp(ctx, PLOT_NOW, false);
     let (mut cancel, mut action, mut pick, mut preview) = (false, None, false, false);
     let center = ctx.content_rect().center();
+    let frame = egui::Frame::new()
+        .fill(egui::Color32::from_rgb(t.panel.r(), t.panel.g(), t.panel.b()))
+        .corner_radius(6)
+        .stroke(egui::Stroke::new(1.0, t.border))
+        .inner_margin(8);
     egui::Window::new(crate::tl!("Plot"))
         .id(egui::Id::new("Plot"))
         .open(open)
@@ -954,14 +1045,31 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
         .resizable(false)
         .pivot(egui::Align2::CENTER_CENTER)
         .default_pos(center)
+        .frame(frame)
         .show(ctx, |ui| {
+            if let Some(err) = &st.error {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(err).color(egui::Color32::from_rgb(220, 50, 50)));
+                });
+                ui.separator();
+            }
+            if st.generating {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(RichText::new(crate::tl!("Generating PDF...")).color(t.accent));
+                });
+                ui.separator();
+            }
             egui::Grid::new("plot_target").num_columns(2).spacing(vec2(10.0, 6.0)).show(ui, |ui| {
                 ui.label(crate::tl!("Layout"));
                 egui::ComboBox::from_id_salt("plot_layout").selected_text(crate::i18n::t(st.target.as_str())).width(190.0).show_ui(ui, |ui| {
                     for n in &targets {
                         if ui.selectable_label(*n == st.target, crate::i18n::t(n)).clicked() && *n != st.target {
-                            st.page = plot_page(d, n);
+                            let (page, replaced) = resolve_plot_page(d, n, &choices);
+                            st.page = page;
+                            st.replaced_device = replaced;
                             st.target = n.clone();
+                            st.error = None;
                         }
                     }
                 });
@@ -971,13 +1079,17 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
             ui.horizontal_top(|ui| {
                 egui::Grid::new("plot_grid").num_columns(2).spacing(vec2(10.0, 6.0)).show(ui, |ui| {
                     let rows = if model {
-                        PageRows { areas: MODEL_AREAS, scale: true, center: false }
+                        PageRows { areas: MODEL_AREAS, scale: true, center: false, replaced_device: st.replaced_device.clone() }
                     } else {
-                        PageRows { areas: &["layout"], scale: false, center: false }
+                        PageRows { areas: &["layout"], scale: false, center: false, replaced_device: st.replaced_device.clone() }
                     };
                     let placement = model.then_some((&mut st.center, &mut st.offset_mm, offset_supported));
                     if let Some((k, v)) = page_rows(ui, egui::Id::new(("plot", st.target.as_str())), &st.page, &rows, &choices, placement) {
+                        if k == "device" {
+                            st.replaced_device = None;
+                        }
                         apply_page_change(&mut st.page, k, &v);
+                        st.error = None;
                     }
                     if model && st.page.plot_area == "window" {
                         for (i, label) in [(0, crate::tl!("First corner")), (2, crate::tl!("Opposite corner"))] {
@@ -1023,7 +1135,11 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
                 preview = ui.button(crate::tl!("Preview")).on_hover_text(crate::tl!("The sheet as these settings plot it")).clicked();
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     cancel = ui.button(crate::tl!("Cancel")).clicked();
-                    ok |= ui.button(crate::tl!("OK")).clicked();
+                    if st.generating {
+                        ui.add_enabled(false, egui::Button::new(crate::tl!("Generating PDF...")));
+                    } else {
+                        ok |= ui.button(crate::tl!("OK")).clicked();
+                    }
                 });
             });
         });
@@ -1032,6 +1148,8 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
     set_temp(ctx, "plot_state", st.clone());
     if cancel {
         *open = false;
+        st.generating = false;
+        st.error = None;
     }
     if pick {
         // The dialog comes back with these settings and the picked window (`plot_window_resume`).
@@ -1043,21 +1161,37 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
     if preview {
         // A sheet about 1600 pixels on its long side.
         let long_in = st.page.width_mm.max(st.page.height_mm).max(1.0) / 25.4;
-        let mut info = format!("{} · {}", st.target, st.page.paper);
+        let mut info = format!("{} · {}", st.target, paper_display_label(&st.page.paper));
         if st.page.landscape {
             info.push_str(&format!(" · {}", crate::tl!("landscape")));
         }
         crate::exchange::preview_plot(app, ctx, plot_params(&st, Some((1600.0 / long_in).clamp(50.0, 300.0))), info);
         return action;
     }
-    if ok {
+    let run_now = if st.generating {
+        st.generating = false;
+        true
+    } else if ok {
+        st.generating = true;
+        st.error = None;
+        ctx.request_repaint();
+        false
+    } else {
+        false
+    };
+
+    if run_now {
         let mut params = plot_params(&st, None);
         if let Some(pick) = app.services.pick_save.as_ref() {
             let title = app.session.state().map(|s| s.title.clone()).unwrap_or_default();
             let stem = std::path::Path::new(&title).file_stem().map(|s| s.to_string_lossy().to_string()).filter(|s| !s.is_empty());
             let suggested = format!("{}-{}.{ext}", stem.unwrap_or_else(|| "Drawing".into()), st.target);
             // Cancelling the file dialog keeps the Plot dialog open with its settings.
-            let Some(path) = pick(&suggested) else { return action };
+            let Some(path) = pick(&suggested) else {
+                st.generating = false;
+                set_temp(ctx, "plot_state", st);
+                return action;
+            };
             if let Some(o) = params.as_object_mut() {
                 o.insert("path".into(), json!(path));
             }
@@ -1072,9 +1206,13 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
                     }
                 };
                 app.session.echo(msg);
+                st.error = None;
             }
             // `run` already echoed the error; keep the dialog open to fix the settings.
-            Err(_) => *open = true,
+            Err(e) => {
+                *open = true;
+                st.error = Some(format_plot_error(&e));
+            }
         }
     }
     action
@@ -1183,6 +1321,9 @@ mod plot_dialog_tests {
             window: [0.0, 0.0, 10.0, 10.0],
             center: true,
             offset_mm: [0.0, 0.0],
+            replaced_device: None,
+            generating: false,
+            error: None,
         }
     }
 

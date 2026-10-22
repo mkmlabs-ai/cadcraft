@@ -62,13 +62,53 @@ fn plot_dialog_is_polish() {
     menus::activate(&mut app, "plot");
     assert_eq!(app.ui.dialog.as_deref(), Some("plot"));
     let lines = render(&mut app);
-    for expected in
-        ["Drukuj", "Arkusz", "Drukarka/ploter", "Rozmiar papieru", "Orientacja", "Obszar wydruku", "Dopasuj do papieru", "Tabela stylów wydruku"]
-    {
+    for expected in [
+        "Drukuj",
+        "Arkusz",
+        "Drukarka/ploter",
+        "Rozmiar papieru",
+        "Orientacja",
+        "Obszar wydruku",
+        "Dopasuj do papieru",
+        "Tabela stylów wydruku",
+        "CADCraft PDF",
+    ] {
         assert!(lines.iter().any(|l| l == expected), "{expected} is shown: {lines:?}");
     }
+    let dev_idx = lines.iter().position(|l| l == "Drukarka/ploter").expect("Drukarka/ploter label");
+    assert_eq!(lines[dev_idx + 1], "CADCraft PDF", "CADCraft PDF is default device: {lines:?}");
     assert!(!lines.iter().any(|l| l == "Printer/plotter" || l == "Paper size" || l == "Fit to paper"), "no English Plot window: {lines:?}");
     assert_eq!(leaks(&lines), Vec::<&str>::new());
+}
+
+#[test]
+fn plot_dialog_replaces_unknown_plotter_and_shows_annotation() {
+    let mut app = host_polish_app();
+    let mut d = cadcraft_doc::Drawing::new_metric();
+    let mut l = cadcraft_doc::Layout::new("A-01", 1);
+    l.page.device = "DWG to PDF.pc3".into();
+    d.layouts.push(l);
+    app.session.open_drawing(d, "House", None);
+    let _ = app.run("layout.set", serde_json::json!({ "name": "A-01" }));
+
+    menus::activate(&mut app, "plot");
+    assert_eq!(app.ui.dialog.as_deref(), Some("plot"));
+    let lines = render(&mut app);
+    assert!(lines.iter().any(|l| l.contains("Zastąpiono: DWG to PDF.pc3")), "annotation is shown: {lines:?}");
+    assert!(lines.iter().any(|l| l == "CADCraft PDF"), "mapped to CADCraft PDF: {lines:?}");
+    assert_eq!(leaks(&lines), Vec::<&str>::new());
+}
+
+#[test]
+fn status_bar_shows_arkusz_in_paper_space() {
+    let mut app = host_polish_app();
+    let mut d = cadcraft_doc::Drawing::new_metric();
+    d.layouts.push(cadcraft_doc::Layout::new("A-01", 1));
+    app.session.open_drawing(d, "House", None);
+    let _ = app.run("layout.set", serde_json::json!({ "name": "A-01" }));
+    let lines = render(&mut app);
+    assert!(lines.iter().any(|l| l == "ARKUSZ"), "status bar toggle button says ARKUSZ: {lines:?}");
+    assert!(!lines.iter().any(|l| l == "PAPER" || l == "PAPIER"), "no PAPER or PAPIER: {lines:?}");
 }
 
 #[test]

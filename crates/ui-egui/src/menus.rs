@@ -185,9 +185,9 @@ fn run_ui_command_inner(app: &mut CadApp, id: &str, params: &Value) -> Option<Re
             let title = app.session.state().map(|s| s.title.clone()).unwrap_or_default();
             let stem = std::path::Path::new(&title).file_stem().map(|s| s.to_string_lossy().to_string()).filter(|s| !s.is_empty());
             let Some(path) = pick(&format!("{}.pdf", stem.unwrap_or_else(|| "Drawing".into()))) else { return Some(Ok(Value::Null)) };
-            let r = app.session.execute("exportpdf", &json!({ "path": path })).map_err(|e| e.to_string());
+            let r = app.session.execute("exportpdf", &json!({ "path": path, "device": "CADCraft PDF" })).map_err(|e| e.to_string());
             app.session.echo(match &r {
-                Ok(_) => format!("Plotted to {path}"),
+                Ok(_) => crate::tf!("Plotted to {path}", path = path),
                 Err(e) => e.clone(),
             });
             r

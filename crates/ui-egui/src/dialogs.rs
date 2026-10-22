@@ -254,7 +254,7 @@ fn units(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) {
         ctx,
         |ui| {
             let [lu, lp, au, ap, ins] = &mut v;
-            let types = |t: &[(i64, &str)]| t.iter().map(|(k, l)| (*k, l.to_string())).collect::<Vec<_>>();
+            let types = |t: &[(i64, &str)]| t.iter().map(|(k, l)| (*k, crate::i18n::t(l).to_string())).collect::<Vec<_>>();
             egui::Grid::new("units_grid").num_columns(2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
                 ui.strong(crate::tl!("Length"));
                 ui.end_row();
@@ -275,7 +275,7 @@ fn units(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) {
                 ui.strong(crate::tl!("Insertion scale"));
                 ui.end_row();
                 ui.label(crate::tl!("Units to scale inserted content"));
-                let names = INSERTION_UNITS.iter().enumerate().map(|(k, l)| (k as i64, l.to_string())).collect::<Vec<_>>();
+                let names = INSERTION_UNITS.iter().enumerate().map(|(k, l)| (k as i64, crate::i18n::t(l).to_string())).collect::<Vec<_>>();
                 pick(ui, "units_insunits", ins, &names);
                 ui.end_row();
                 ui.strong(crate::tl!("Sample output"));

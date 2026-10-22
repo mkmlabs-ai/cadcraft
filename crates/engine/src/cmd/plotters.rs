@@ -244,8 +244,14 @@ pub fn page_device(cmd: &str, p: &Value, page: &mut PageSetup) -> Result<bool> {
             page.device = NO_DEVICE.into();
             return Ok(false);
         }
-        Some(n) => Some(find_device(n).ok_or_else(|| unknown_device(cmd, n))?),
-        None => find_device(&page.device),
+        Some(n) => Some(
+            find_device(n)
+                .or_else(|| if n.to_ascii_lowercase().ends_with(".pc3") { find_device("CADCraft PDF") } else { None })
+                .ok_or_else(|| unknown_device(cmd, n))?,
+        ),
+        None => {
+            find_device(&page.device).or_else(|| if page.device.to_ascii_lowercase().ends_with(".pc3") { find_device("CADCraft PDF") } else { None })
+        }
     };
     let Some(dev) = dev else { return Ok(false) };
     let switched = !page.device.eq_ignore_ascii_case(&dev.name);
@@ -291,10 +297,21 @@ pub(crate) fn plot_options(s: &Session, p: &Value, cmd: &str) -> Result<Value> {
             None => None,
         },
     };
-    let dev = match given {
-        Some(n) if n.is_empty() || n.eq_ignore_ascii_case(NO_DEVICE) => None,
-        Some(n) => Some(find_device(n).ok_or_else(|| unknown_device(cmd, n))?),
-        None => layout.as_ref().and_then(|pg| find_device(&pg.device)),
+    let dev = if cmd == "exportpdf" {
+        // EXPORTPDF always writes PDF using CADCraft PDF (or an explicitly requested known device)
+        given.and_then(find_device).or_else(|| layout.as_ref().and_then(|pg| find_device(&pg.device))).or_else(|| find_device("CADCraft PDF"))
+    } else {
+        match given {
+            Some(n) if n.is_empty() || n.eq_ignore_ascii_case(NO_DEVICE) => None,
+            Some(n) => Some(
+                find_device(n)
+                    .or_else(|| if n.to_ascii_lowercase().ends_with(".pc3") { find_device("CADCraft PDF") } else { None })
+                    .ok_or_else(|| unknown_device(cmd, n))?,
+            ),
+            None => layout.as_ref().and_then(|pg| {
+                find_device(&pg.device).or_else(|| if pg.device.to_ascii_lowercase().ends_with(".pc3") { find_device("CADCraft PDF") } else { None })
+            }),
+        }
     };
     let mut out = if p.is_object() { p.clone() } else { json!({}) };
     let (Some(dev), Some(o)) = (dev, out.as_object_mut()) else { return Ok(out) };
@@ -306,8 +323,12 @@ pub(crate) fn plot_options(s: &Session, p: &Value, cmd: &str) -> Result<Value> {
         Some(name) => match device_paper(&dev, name) {
             Some(pp) => Some(pp),
             None => {
-                let known: Vec<&str> = dev.papers.iter().map(|x| x.name.as_str()).take(50).collect();
-                return Err(bad(cmd, format!("plotter `{}` has no paper `{name}` (papers: {})", dev.name, known.join(", "))));
+                if cmd == "exportpdf" || dev.name.eq_ignore_ascii_case("CADCraft PDF") {
+                    dev.default_paper()
+                } else {
+                    let known: Vec<&str> = dev.papers.iter().map(|x| x.name.as_str()).take(50).collect();
+                    return Err(bad(cmd, format!("plotter `{}` has no paper `{name}` (papers: {})", dev.name, known.join(", "))));
+                }
             }
         },
         // A layout keeps its page setup's paper; model space takes the device's default.

@@ -428,6 +428,7 @@
 	Entire drawing	Cały rysunek
 	Equal	Równość
 	Erase	Wymaż
+	Error	Błąd
 	Evaluate	Oblicz
 	Evaluate LISP	Wykonaj LISP
 	Every library linetype is loaded.	Wszystkie rodzaje linii z biblioteki są wczytane.
@@ -474,6 +475,7 @@
 	From File...	Z pliku...
 	From Template...	Z szablonu...
 	General	Ogólne
+	Generating PDF...	Generowanie PDF...
 	Geometric	Geometryczne
 	Geometric Center	Środek geometryczny
 	Geometric Constraint	Wiązanie geometryczne
@@ -549,6 +551,7 @@
 	Import...	Importuj...
 	In	Przybliż
 	In-window Menu Bar	Pasek menu w oknie
+	Inches	cale
 	Include in new selection set	Uwzględnij w nowym zbiorze wskazań
 	Increment angle	Przyrost kąta
 	Index Color	Kolor indeksowany
@@ -817,7 +820,7 @@
 	Overlay	Nakładka
 	Overline	Nadkreślenie
 	Override	Nadpisz
-	PAPER	PAPIER
+	PAPER	ARKUSZ
 	PDF on the paper chosen below	PDF na papierze wybranym poniżej
 	PRs	PR-y
 	Page Setup Manager	Menedżer ustawień strony
@@ -864,6 +867,7 @@
 	Plot transparency	Drukuj przezroczystość
 	Plotted {target} ({bytes} bytes of PDF; there is no file dialog here)	Wydrukowano {target} ({bytes} B PDF; brak okna wyboru pliku)
 	Plotted {target} to {path}	Wydrukowano {target} do {path}
+	Plotted to {path}	Wydrukowano do {path}
 	Plotter Manager	Menedżer ploterów
 	Plotter Manager...	Menedżer ploterów...
 	Plus/minus	Plus/minus
@@ -922,6 +926,7 @@
 	Quit CADCraft	Zakończ CADCraft
 	Radius	Promień
 	Raster Image	Obraz rastrowy
+	Raster PNG image	Obraz rastrowy PNG
 	Ray	Półprosta
 	Read-only	Tylko do odczytu
 	Real name	Imię i nazwisko
@@ -954,6 +959,7 @@
 	Release the 3D mouse to calibrate its resting position	Puść mysz 3D, aby skalibrować jej położenie spoczynkowe
 	Reload	Wczytaj ponownie
 	Reload All	Wczytaj wszystko ponownie
+	Replaced: {name}	Zastąpiono: {name}
 	Remove	Usuń
 	Remove Leader	Usuń odnośnik
 	Remove Vertex	Usuń wierzchołek
@@ -1383,6 +1389,7 @@
 	Unlock viewport	Odblokuj rzutnię
 	Unmerge Cells	Rozdziel komórki
 	Unreferenced	Nieużywany
+	Unknown plotter: {name}	Nieznany ploter: {name}
 	Unresolved	Nierozwiązany
 	Unsaved Layer State	Niezapisany stan warstw
 	Unsaved changes	Niezapisane zmiany
@@ -1414,6 +1421,8 @@
 	Version {version}	Wersja {version}
 	Vertical	Pionowy
 	VerticalDistance	Odległość pionowa
+	Vector PDF	Wektorowy plik PDF
+	Vector SVG image	Wektorowy plik SVG
 	View	Widok
 	ViewCube	ViewCube
 	Viewport	Rzutnia
