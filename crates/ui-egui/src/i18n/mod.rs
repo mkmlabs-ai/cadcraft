@@ -45,10 +45,12 @@ pub enum Preference {
     Hungarian,
     #[serde(rename = "tr")]
     Turkish,
+    #[serde(rename = "pl")]
+    Polish,
 }
 
 impl Preference {
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::Auto,
         Self::English,
         Self::Greek,
@@ -66,6 +68,7 @@ impl Preference {
         Self::Arabic,
         Self::Hungarian,
         Self::Turkish,
+        Self::Polish,
     ];
 
     /// The codes a preference can be given as, for messages ("auto, en or uk").
@@ -96,6 +99,7 @@ impl Preference {
             Self::Arabic => "ar",
             Self::Hungarian => "hu",
             Self::Turkish => "tr",
+            Self::Polish => "pl",
         }
     }
 
@@ -124,6 +128,7 @@ impl Preference {
             Self::Arabic => "العربية",
             Self::Hungarian => "Magyar",
             Self::Turkish => "Türkçe",
+            Self::Polish => "Polski",
         }
     }
 
@@ -154,6 +159,7 @@ impl Preference {
             Self::Arabic => "ar",
             Self::Hungarian => "hu",
             Self::Turkish => "tr",
+            Self::Polish => "pl",
             Self::Auto => locales.iter().find_map(|s| locale_language(s)).unwrap_or("en"),
         }
     }
@@ -170,7 +176,7 @@ pub struct Language {
     catalog: OnceLock<Catalog<'static>>,
 }
 
-pub static LANGUAGES: [Language; 16] = [
+pub static LANGUAGES: [Language; 17] = [
     Language { code: "en", name: "English", source: "", plural: plural_en, plural_forms: 2, catalog: OnceLock::new() },
     // Greek: one for exactly 1; other for zero and all other integer counts.
     Language { code: "el", name: "Ελληνικά", source: include_str!("el.tsv"), plural: plural_en, plural_forms: 2, catalog: OnceLock::new() },
@@ -211,6 +217,8 @@ pub static LANGUAGES: [Language; 16] = [
     Language { code: "hu", name: "Magyar", source: include_str!("hu.tsv"), plural: plural_ko, plural_forms: 1, catalog: OnceLock::new() },
     // Turkish keeps a noun singular after a number ("3 commit"), so like Korean it has one form.
     Language { code: "tr", name: "Türkçe", source: include_str!("tr.tsv"), plural: plural_ko, plural_forms: 1, catalog: OnceLock::new() },
+    // Polish: one (1), few (2–4, 22–24…, not 12–14), many (0, 5–21, 25…).
+    Language { code: "pl", name: "Polski", source: include_str!("pl.tsv"), plural: plural_pl, plural_forms: 3, catalog: OnceLock::new() },
 ];
 
 /// BCP 47 and POSIX locale tags, including `uk-UA`, `uk_UA.UTF-8` and `pt_BR.UTF-8`.
@@ -342,6 +350,16 @@ pub fn plural_arabic(n: u64) -> usize {
 
 fn plural_en(n: u64) -> usize {
     usize::from(n != 1)
+}
+
+/// Polish integer plurals (CLDR `pl`): one (1), few (2–4, 22–24, … but not 12–14), many (everything else).
+pub fn plural_pl(n: u64) -> usize {
+    match (n, n % 10, n % 100) {
+        (1, _, _) => 0,
+        (_, 2..=4, 12..=14) => 2,
+        (_, 2..=4, _) => 1,
+        _ => 2,
+    }
 }
 
 /// Czech integer plurals: one (1), few (2–4), other (0 and 5 or more).

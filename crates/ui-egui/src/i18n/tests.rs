@@ -39,7 +39,7 @@ fn catalog_is_valid_and_preserves_placeholders_and_ellipses() {
 /// to English for what they don't cover yet; their gaps are reported, not enforced, so adding a
 /// command doesn't require a row in every language.
 const REQUIRED: &[&str] = &["uk"];
-const REPORTED: &[&str] = &["pt-BR", "de", "es", "cs", "ru", "fr", "zh", "it", "ko", "sv", "ar", "hu", "tr", "el"];
+const REPORTED: &[&str] = &["pt-BR", "de", "es", "cs", "ru", "fr", "zh", "it", "ko", "sv", "ar", "hu", "tr", "el", "pl"];
 
 fn check(language: &str, what: &str, missing: Vec<String>) {
     if REQUIRED.contains(&language) {
@@ -155,14 +155,14 @@ fn locale_and_saved_preference_resolution() {
     for (tag, code) in [("ru", "ru"), ("ru-RU", "ru"), ("ru_RU.UTF-8", "ru"), ("fr", "fr"), ("fr-FR", "fr"), ("fr_CA.UTF-8", "fr")] {
         assert_eq!(locale_language(tag), Some(code), "{tag}");
     }
-    for tag in ["ua", "ukulele", "pl-PL", "", "garbage", "💙"] {
+    for tag in ["ua", "ukulele", "nl-NL", "", "garbage", "💙"] {
         assert_eq!(locale_language(tag), None, "{tag}");
     }
     for tag in ["pt", "pt-BR", "pt_BR.UTF-8", "PT-br", "pt-PT"] {
         assert_eq!(locale_language(tag), Some("pt-BR"), "{tag}");
     }
     assert_eq!(locale_language("ptolemy"), None);
-    assert_eq!(Preference::Auto.resolve(&["pl-PL".into(), "pt-BR".into()]), "pt-BR");
+    assert_eq!(Preference::Auto.resolve(&["nl-NL".into(), "pt-BR".into()]), "pt-BR");
     assert_eq!(Preference::Auto.resolve(&["fr-FR".into(), "pt-BR".into()]), "fr");
     for tag in ["es", "es-ES", "es_MX.UTF-8", "ES-ar"] {
         assert_eq!(locale_language(tag), Some("es"), "{tag}");
@@ -171,7 +171,7 @@ fn locale_and_saved_preference_resolution() {
     assert_eq!(Preference::parse("es"), Some(Preference::Spanish));
     assert_eq!(Preference::BrazilianPortuguese.resolve(&["uk-UA".into()]), "pt-BR");
     assert_eq!(Preference::parse("pt-BR"), Some(Preference::BrazilianPortuguese));
-    let locales = vec!["pl-PL".into(), "uk-UA".into(), "en-US".into()];
+    let locales = vec!["nl-NL".into(), "uk-UA".into(), "en-US".into()];
     assert_eq!(Preference::Auto.resolve(&locales), "uk");
     assert_eq!(Preference::English.resolve(&locales), "en");
     assert_eq!(Preference::German.resolve(&locales), "de");
@@ -458,7 +458,7 @@ fn czech_locales_preferences_and_plural_forms() {
     assert_eq!(Preference::parse("cs"), Some(Preference::Czech));
     assert_eq!(Preference::Czech.name(), "Čeština");
     assert_eq!(Preference::Czech.resolve(&["en-US".into()]), "cs");
-    assert_eq!(Preference::Auto.resolve(&["pl-PL".into(), "cs-CZ".into(), "en-US".into()]), "cs");
+    assert_eq!(Preference::Auto.resolve(&["nl-NL".into(), "cs-CZ".into(), "en-US".into()]), "cs");
     let mut app = CadApp::new(Session::new(), Services::default());
     app.ui.interface_language = Preference::Czech;
     let mut restored = CadApp::new(Session::new(), Services::default());
@@ -671,7 +671,7 @@ fn korean_locale_saved_preference_and_single_count_form() {
     }
     assert_eq!(Preference::parse("ko"), Some(Preference::Korean));
     assert_eq!(Preference::Korean.resolve(&["en-US".into()]), "ko");
-    assert_eq!(Preference::Auto.resolve(&["pl-PL".into(), "ko-KR".into(), "en-US".into()]), "ko");
+    assert_eq!(Preference::Auto.resolve(&["nl-NL".into(), "ko-KR".into(), "en-US".into()]), "ko");
     let mut app = CadApp::new(Session::new(), Services::default());
     app.system_languages = vec!["ko-KR".into()];
     app.run("ui.language", json!({"lang": "ko"})).unwrap();
@@ -824,7 +824,7 @@ fn swedish_locales_preferences_and_plural_forms() {
     assert_eq!(Preference::parse("sv"), Some(Preference::Swedish));
     assert_eq!(Preference::Swedish.name(), "Svenska");
     assert_eq!(Preference::Swedish.resolve(&["en-US".into()]), "sv");
-    assert_eq!(Preference::Auto.resolve(&["pl-PL".into(), "sv-SE".into(), "en-US".into()]), "sv");
+    assert_eq!(Preference::Auto.resolve(&["nl-NL".into(), "sv-SE".into(), "en-US".into()]), "sv");
     let mut app = CadApp::new(Session::new(), Services::default());
     app.ui.interface_language = Preference::Swedish;
     let mut restored = CadApp::new(Session::new(), Services::default());
@@ -929,7 +929,7 @@ fn hungarian_locales_preferences_and_plural_forms() {
     assert_eq!(Preference::parse("hu"), Some(Preference::Hungarian));
     assert_eq!(Preference::Hungarian.name(), "Magyar");
     assert_eq!(Preference::Hungarian.resolve(&["en-US".into()]), "hu");
-    assert_eq!(Preference::Auto.resolve(&["pl-PL".into(), "hu-HU".into(), "en-US".into()]), "hu");
+    assert_eq!(Preference::Auto.resolve(&["nl-NL".into(), "hu-HU".into(), "en-US".into()]), "hu");
     let mut app = CadApp::new(Session::new(), Services::default());
     app.ui.interface_language = Preference::Hungarian;
     let mut restored = CadApp::new(Session::new(), Services::default());
@@ -1033,7 +1033,7 @@ fn turkish_locales_preferences_and_single_count_form() {
     assert_eq!(Preference::parse("tr"), Some(Preference::Turkish));
     assert_eq!(Preference::Turkish.name(), "Türkçe");
     assert_eq!(Preference::Turkish.resolve(&["en-US".into()]), "tr");
-    assert_eq!(Preference::Auto.resolve(&["pl-PL".into(), "tr-TR".into(), "en-US".into()]), "tr");
+    assert_eq!(Preference::Auto.resolve(&["nl-NL".into(), "tr-TR".into(), "en-US".into()]), "tr");
     let mut app = CadApp::new(Session::new(), Services::default());
     app.ui.interface_language = Preference::Turkish;
     let mut restored = CadApp::new(Session::new(), Services::default());
@@ -1171,4 +1171,16 @@ fn default_fonts_cover_all_greek_letters_in_the_catalog() {
             }
         }
     });
+}
+
+#[test]
+fn polish_locales_preferences_and_plural_forms() {
+    for tag in ["pl", "pl-PL", "pl_PL.UTF-8", "PL-pl"] {
+        assert_eq!(locale_language(tag), Some("pl"), "{tag}");
+    }
+    assert_eq!(Preference::parse("pl"), Some(Preference::Polish));
+    assert_eq!(Preference::Polish.name(), "Polski");
+    assert_eq!(Preference::Auto.resolve(&["pl-PL".into(), "en-US".into()]), "pl");
+    let forms: Vec<usize> = [0, 1, 2, 4, 5, 12, 14, 21, 22, 24, 25, 112, 122].into_iter().map(plural_pl).collect();
+    assert_eq!(forms, [2, 0, 1, 1, 2, 2, 2, 2, 1, 1, 2, 2, 1]);
 }
