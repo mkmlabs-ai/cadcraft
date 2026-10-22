@@ -114,7 +114,7 @@ pub(super) fn mesh(g: &TextGlyph, xf: Mat3, pixel: f64) -> Arc<Mesh> {
 
 /// Iterative Douglas-Peucker on a closed contour. Never collapse a hole to a line or recurse
 /// on font data; preserve the original if the work budget is exhausted.
-fn simplify(contour: &[Vec2], tolerance: f64) -> Vec<Vec2> {
+pub(super) fn simplify(contour: &[Vec2], tolerance: f64) -> Vec<Vec2> {
     if contour.len() < 5 {
         return contour.to_vec();
     }

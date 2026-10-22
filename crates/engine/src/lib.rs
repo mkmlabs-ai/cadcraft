@@ -1805,6 +1805,23 @@ impl Session {
         Ok(())
     }
 
+    /// Fit the main body of the drawing: like [`Session::zoom_extents`], but a few objects far from
+    /// everything else (stray lines at 0,0 of a drawing in a national grid) are left out. This is
+    /// the first view of an opened drawing and ZOOM Content; ZOOM Extents stays exact.
+    pub fn zoom_content(&mut self) -> Result<()> {
+        let space = self.space();
+        let ext = self.doc()?.content_extents(&space);
+        if ext.is_empty() {
+            return self.zoom_extents();
+        }
+        let (w, h) = self.viewport_px;
+        let st = self.state_mut()?;
+        let aspect = st.zoom_aspect(w / h.max(1.0));
+        let height = ext.height().max(ext.width() / aspect.max(1e-6)).max(1e-6) * 1.05;
+        st.set_zoom_frame(View { center: ext.center(), height });
+        Ok(())
+    }
+
     /// Zoom by `factor` (> 1 zooms in) keeping `about` fixed on screen.
     pub fn zoom_about(&mut self, factor: f64, about: Vec2) -> Result<()> {
         if !(factor.is_finite() && factor > 0.0) {

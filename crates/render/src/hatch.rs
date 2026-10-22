@@ -33,9 +33,9 @@ pub(super) fn draw(b: &mut Builder, ctx: &Ctx, e: &Entity, h: &Hatch, rgb: Ink, 
     let dense = b.opts.fill && reads_solid(ctx.d, h, px);
     if h.solid || h.pattern.eq_ignore_ascii_case("SOLID") || h.gradient.is_some() || dense {
         if b.opts.fill {
-            let tris = fill::triangulate_evenodd(&loops);
+            let tris = fill::triangulate_evenodd(&screen_detail(&loops, px));
             match &h.gradient {
-                Some(g) => gradient(b, ctx, g, layer_color, &tris),
+                Some(g) => gradient(b, ctx, g, layer_color, &tris, px),
                 None => b.tris(ctx, rgb, &tris),
             }
         }
@@ -44,7 +44,7 @@ pub(super) fn draw(b: &mut Builder, ctx: &Ctx, e: &Entity, h: &Hatch, rgb: Ink, 
     if let Some(bg) = h.background
         && b.opts.fill
     {
-        b.tris(ctx, ink(bg, layer_color, ctx.block_color), &fill::triangulate_evenodd(&loops));
+        b.tris(ctx, ink(bg, layer_color, ctx.block_color), &fill::triangulate_evenodd(&screen_detail(&loops, px)));
     }
     // The area being looked at, in the hatch's units.
     let view = b.opts.view.and_then(|v| {
@@ -60,6 +60,17 @@ pub(super) fn draw(b: &mut Builder, ctx: &Ctx, e: &Entity, h: &Hatch, rgb: Ink, 
             b.polyline(ctx, rgb, lw, &seg);
         }
     }
+}
+
+/// The boundary loops of a fill at screen detail: a vertex that moves the outline less than half
+/// a pixel (`px` is a pixel in the hatch's units at the finest zoom the list serves; 0 = full
+/// detail) is dropped before the fill is triangulated, so a hatch far away costs a handful of
+/// triangles instead of one per boundary vertex. Plots and exports pass 0 and keep every vertex.
+fn screen_detail(loops: &[Vec<Vec2>], px: f64) -> std::borrow::Cow<'_, [Vec<Vec2>]> {
+    if !(px.is_finite() && px > 0.0) {
+        return std::borrow::Cow::Borrowed(loops);
+    }
+    std::borrow::Cow::Owned(loops.iter().map(|l| super::text::simplify(l, px * 0.5)).collect())
 }
 
 /// Upper bound on loop count × vertex count for island detection (the nesting test compares
@@ -127,6 +138,8 @@ fn probe(l: &[Vec2]) -> Option<Vec2> {
 
 /// Colour steps a gradient is drawn with (one display-list primitive each).
 const GRADIENT_LEVELS: usize = 64;
+/// Smallest edge of a gradient piece on screen, in pixels (finest zoom the list serves).
+const GRADIENT_MIN_CELL_PX: f64 = 3.0;
 /// Gradient triangles are split until no edge is longer than the larger extent over this.
 const GRADIENT_CELLS: f64 = 64.0;
 /// Upper bound on the triangles of one gradient fill.
@@ -135,11 +148,11 @@ const MAX_GRADIENT_TRIS: usize = 200_000;
 /// A two-colour gradient over the fill triangles `tris`: a base fill in the middle colour (it
 /// hides seams between steps), then the triangles split into small pieces, each drawn in the
 /// colour step of the gradient value at its centroid.
-fn gradient(b: &mut Builder, ctx: &Ctx, g: &Gradient, layer: Color, tris: &[Vec2]) {
+fn gradient(b: &mut Builder, ctx: &Ctx, g: &Gradient, layer: Color, tris: &[Vec2], px: f64) {
     let c1 = ink(g.color1, layer, ctx.block_color);
     let c2 = ink(g.color2, layer, ctx.block_color);
     b.tris(ctx, mix(c1, c2, 0.5), tris);
-    let Some(field) = Field::new(g, tris) else { return };
+    let Some(field) = Field::new(g, tris, px) else { return };
     let mut steps: Vec<Vec<Vec2>> = vec![Vec::new(); GRADIENT_LEVELS];
     let max2 = field.cell * field.cell;
     let mut stack: Vec<[Vec2; 3]> = tris.as_chunks::<3>().0.to_vec();
@@ -207,7 +220,7 @@ struct Field {
 }
 
 impl Field {
-    fn new(g: &Gradient, tris: &[Vec2]) -> Option<Field> {
+    fn new(g: &Gradient, tris: &[Vec2], px: f64) -> Option<Field> {
         let name = g.name.trim().to_ascii_uppercase();
         let (inverted, base) = match name.strip_prefix("INV") {
             Some(rest) => (true, rest),
@@ -233,7 +246,10 @@ impl Field {
             centre.y = bb.min.y;
         }
         let reach = [centre.x - bb.min.x, bb.max.x - centre.x, centre.y - bb.min.y, bb.max.y - centre.y].into_iter().fold(0.0, f64::max).max(1e-12);
-        Some(Field { shape, inverted, dir, bb, centre, reach, cell: size / GRADIENT_CELLS })
+        // A piece is a flat colour, so pieces much smaller than a pixel add vertices and nothing
+        // to the picture: on-screen builds (`px` > 0) keep them at least GRADIENT_MIN_CELL_PX wide.
+        let screen = if px.is_finite() && px > 0.0 { px * GRADIENT_MIN_CELL_PX } else { 0.0 };
+        Some(Field { shape, inverted, dir, bb, centre, reach, cell: (size / GRADIENT_CELLS).max(screen) })
     }
 
     /// The value at world point `p`, in 0..=1.

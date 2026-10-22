@@ -1495,3 +1495,5 @@ menu	Modify	Zmiana
 menu	View	Widok
 @plural	{n} commit	{n} commit|{n} commity|{n} commitów
 @plural	{n} contributor	{n} współtwórca|{n} współtwórcy|{n} współtwórców
+	Zoom Content	Zoom zawartość
+	Content	Zawartość

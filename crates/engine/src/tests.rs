@@ -1359,3 +1359,21 @@ fn hostile_variable_like_input_never_panics() {
     s.cmdline("pickadd").unwrap();
     assert!(setvar_prompt_open(&s));
 }
+
+#[test]
+fn zoom_content_skips_strays_and_extents_stays_exact() {
+    let mut s = Session::new();
+    s.viewport_px = (1000.0, 500.0);
+    for i in 0..60 {
+        let x = 6_410_000.0 + f64::from(i) * 1000.0;
+        s.execute("line", &json!({"points": [[x, 5_930_000.0], [x + 500.0, 5_930_300.0]]})).unwrap();
+    }
+    s.execute("line", &json!({"points": [[0, 0], [10, 2]]})).unwrap();
+    s.execute("zoom.extents", &json!({})).unwrap();
+    let all = s.state().unwrap().view();
+    assert!(all.center.x < 4_000_000.0 && all.height > 1_000_000.0, "{all:?}");
+    s.execute("zoom.content", &json!({})).unwrap();
+    let c = s.state().unwrap().view();
+    assert!((6_410_000.0..6_480_000.0).contains(&c.center.x), "{c:?}");
+    assert!(c.height < 200_000.0, "{c:?}");
+}

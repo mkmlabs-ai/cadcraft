@@ -26,7 +26,7 @@ pub use cadcraft_color as color;
 pub use cadcraft_geom as geom;
 pub use constraint::*;
 pub use entity::*;
-pub use extents::{MAX_BLOCK_DEPTH, entity_bounds};
+pub use extents::{MAX_BLOCK_DEPTH, entity_bounds, robust_bounds};
 pub use gdt::*;
 pub use header::{HVal, Header};
 pub use plotstyle::*;
@@ -362,6 +362,16 @@ impl Drawing {
             }
         }
         b
+    }
+
+    /// Bounds of the main body of the visible entities in a space: like [`Drawing::extents`], but
+    /// a few objects far from the rest (stray lines at the origin of a drawing in a national grid)
+    /// do not count (see [`robust_bounds`]). Used for the first view of a drawing and ZOOM Content;
+    /// ZOOM Extents keeps the exact extents.
+    pub fn content_extents(&self, space: &Space) -> cadcraft_geom::Bounds2 {
+        let Some(store) = self.space(space) else { return cadcraft_geom::Bounds2::EMPTY };
+        let boxes: Vec<cadcraft_geom::Bounds2> = store.iter().filter(|e| self.is_visible(e)).map(|e| entity_bounds(self, e, 0)).collect();
+        robust_bounds(&boxes)
     }
 
     /// Total entity count across model and paper space.

@@ -19,6 +19,10 @@ egui = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 
+[dev-dependencies]
+cadcraft-render = { workspace = true }
+cadcraft-color = { workspace = true }
+
 [build-dependencies]
 winresource = "0.1"
 

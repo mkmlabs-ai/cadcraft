@@ -999,3 +999,52 @@ fn wide_polyline_centre_line_is_drawn_on_screen_only() {
         assert_eq!(lines(&see_through), 0, "{lt}: a transparent band gets no hairline");
     }
 }
+
+// ---------- big drawings on screen: leave out what is off screen, draw far things coarsely ----------
+
+fn line_at(d: &mut Drawing, (x0, y0): (f64, f64), (x1, y1): (f64, f64)) {
+    let line = cadcraft_doc::Line { a: Vec3::new(x0, y0, 0.0), b: Vec3::new(x1, y1, 0.0) };
+    d.add(&Space::Model, Common::default(), EntityKind::Line(line)).unwrap();
+}
+
+#[test]
+fn objects_outside_the_view_are_left_out_of_a_screen_build() {
+    let mut d = Drawing::new_imperial();
+    line_at(&mut d, (0.0, 0.0), (10.0, 0.0));
+    line_at(&mut d, (5_000.0, 0.0), (5_010.0, 0.0));
+    // An infinite line has no extent: it is always built.
+    let xline = cadcraft_doc::RayLine { base: Vec3::new(9_000.0, 9_000.0, 0.0), dir: Vec3::new(1.0, 0.0, 0.0) };
+    d.add(&Space::Model, Common::default(), EntityKind::XLine(xline)).unwrap();
+    assert_eq!(build(&d, &Space::Model, &Options::default()).prims.len(), 3, "no view: everything");
+    let view = Some(Bounds2::new(Vec2::new(-5.0, -5.0), Vec2::new(20.0, 20.0)));
+    let near = build(&d, &Space::Model, &Options { view, ..Default::default() });
+    assert_eq!(near.prims.len(), 2, "the far line is left out, the infinite line stays");
+    assert!(near.prims.iter().any(|p| matches!(p.kind, Kind::Infinite { .. })), "the infinite line is kept");
+    // An object that only reaches into the margin around the view is still built.
+    let edge = Some(Bounds2::new(Vec2::new(10.5, -1.0), Vec2::new(30.0, 1.0)));
+    assert!(build(&d, &Space::Model, &Options { view: edge, ..Default::default() }).prims.len() >= 2);
+}
+
+fn gradient_rect(w: f64, h: f64) -> Drawing {
+    let gradient = cadcraft_doc::Gradient { name: "LINEAR".into(), color1: Color::Index(1), color2: Color::Index(5), angle: 0.0, centered: false };
+    let hatch = Hatch { solid: true, pattern: "SOLID".into(), gradient: Some(gradient), ..pattern_hatch("SOLID", 1.0, (0.0, 0.0, w, h)) };
+    drawing_with(hatch)
+}
+
+fn tri_vertices(l: &DisplayList) -> usize {
+    l.prims.iter().filter(|p| p.kind == Kind::Tris).map(|p| p.len as usize).sum()
+}
+
+#[test]
+fn gradient_pieces_are_no_smaller_than_a_few_pixels_on_screen() {
+    let d = gradient_rect(96.0, 46.0);
+    let full = build(&d, &Space::Model, &Options::default());
+    // A pixel is 30 units: the whole fill is a few pixels wide.
+    let far = build(&d, &Space::Model, &Options { min_dash: 60.0, ..Default::default() });
+    let (f, c) = (tri_vertices(&full), tri_vertices(&far));
+    assert!(c > 0, "still drawn");
+    assert!(c * 20 < f, "{c} vs {f} triangle vertices");
+    // Zoomed in (a pixel is 0.05 units) the gradient keeps its smooth steps.
+    let near = build(&d, &Space::Model, &Options { min_dash: 0.1, ..Default::default() });
+    assert!(tri_vertices(&near) * 2 > f, "{} vs {f}", tri_vertices(&near));
+}

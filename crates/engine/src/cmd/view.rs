@@ -51,6 +51,10 @@ pub fn specs() -> Vec<CommandSpec> {
             .menu(&["View", "Zoom", "Extents"])
             .noundo()
             .transparent(),
+        CommandSpec::new("zoom.content", "Zoom Content", |s, _| zoom(s, &json!({"mode":"content"})))
+            .menu(&["View", "Zoom", "Content"])
+            .noundo()
+            .transparent(),
         CommandSpec::new("zoom.object", "Zoom Object", |s, p| {
             zoom(s, &json!({"mode":"object", "handles": p.get("handles").cloned().unwrap_or(Value::Null)}))
         })
@@ -128,6 +132,7 @@ pub(crate) fn zoom(s: &mut Session, p: &Value) -> Result<Value> {
     let mode = str_param(p, "mode").unwrap_or("extents").to_ascii_lowercase();
     match mode.as_str() {
         "extents" | "e" => s.zoom_extents()?,
+        "content" => s.zoom_content()?,
         "all" | "a" => {
             let b = ext_bounds(s)?.union(&s.zoom_limits()?);
             fit(s, b.expand(b.height().max(b.width()) * 0.02))?;

@@ -539,6 +539,9 @@ fn build_space(d: &Drawing, space: &Space, opts: &Options, plotting: bool) -> Di
                 }
                 continue;
             }
+            if outside_view(d, opts, e) {
+                continue;
+            }
             entity(&mut b, &top_ctx(d, Mat3::IDENTITY, e.handle, &[], &[]), e);
         }
     }
@@ -547,6 +550,18 @@ fn build_space(d: &Drawing, space: &Space, opts: &Options, plotting: bool) -> Di
         pen::apply(&mut b.list, sheet.unit_mm);
     }
     b.list
+}
+
+/// Whether a top-level entity lies outside the area an on-screen build is for ([`Options::view`]),
+/// so that building it (tessellating its fills, meshing its text) and uploading the result would
+/// be wasted: the canvas rebuilds before the view leaves that area. Objects without a known extent
+/// (infinite lines) are always built, and a margin of a tenth of the area absorbs estimates that
+/// are a little tight (text boxes, line weights).
+fn outside_view(d: &Drawing, opts: &Options, e: &Entity) -> bool {
+    let Some(view) = opts.view else { return false };
+    let bounds = cadcraft_doc::entity_bounds(d, e, 0);
+    let known = !bounds.is_empty() && bounds.min.is_finite() && bounds.max.is_finite();
+    known && !view.expand(view.width().max(view.height()) * 0.1).intersects(&bounds)
 }
 
 /// Top-level entities per task when a display list is built on all cores.
@@ -570,6 +585,9 @@ fn build_parallel(b: &mut Builder, d: &Drawing, store: &cadcraft_doc::EntityStor
             let mut part =
                 Builder { list: DisplayList::default(), opts, plotting, styles: None, named: None, shared_budget: Some(&budget), transparency: 0 };
             for e in chunk {
+                if outside_view(d, opts, e) {
+                    continue;
+                }
                 entity(&mut part, &top_ctx(d, Mat3::IDENTITY, e.handle, &[], &[]), e);
             }
             part.list

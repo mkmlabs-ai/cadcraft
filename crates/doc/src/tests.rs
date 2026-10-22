@@ -581,3 +581,45 @@ fn space_names_its_tab() {
     assert_eq!(p.layout(), Some("Sheet A"));
     assert_eq!(p.tab_name(), "Sheet A");
 }
+
+/// A drawing in a national grid (millions of units from the origin) with a few stray lines left at
+/// 0,0: the first view must show the drawing, ZOOM Extents stays exact.
+fn grid_drawing_with_strays(strays: usize) -> Drawing {
+    let mut d = Drawing::new_metric();
+    for i in 0..2000 {
+        let (x, y) = (6_410_000.0 + f64::from(i % 50) * 1400.0, 5_930_000.0 + f64::from(i / 50) * 700.0);
+        d.add(&Space::Model, Common::default(), line((x, y), (x + 500.0, y + 300.0))).unwrap();
+    }
+    for i in 0..strays {
+        d.add(&Space::Model, Common::default(), line((0.0, 0.0), (f64::from(i as u32), 2.0))).unwrap();
+    }
+    d
+}
+
+#[test]
+fn content_extents_ignore_a_few_strays_far_from_the_drawing() {
+    let d = grid_drawing_with_strays(12);
+    let full = d.extents(&Space::Model);
+    assert!(full.min.x < 100.0 && full.max.x > 6_400_000.0, "extents cover both clusters: {full:?}");
+    let c = d.content_extents(&Space::Model);
+    assert!(c.min.x >= 6_410_000.0 && c.max.x <= 6_490_000.0, "{c:?}");
+    assert!(c.min.y >= 5_930_000.0 && c.max.y <= 5_970_000.0, "{c:?}");
+    // The drawing itself is complete: every real line is inside.
+    assert!(c.width() > 60_000.0 && c.height() > 25_000.0, "{c:?}");
+}
+
+#[test]
+fn content_extents_equal_extents_for_a_plain_drawing() {
+    let d = grid_drawing_with_strays(0);
+    assert_eq!(d.content_extents(&Space::Model), d.extents(&Space::Model));
+    // Too few objects to call any of them stray.
+    let mut small = Drawing::new_metric();
+    small.add(&Space::Model, Common::default(), line((0.0, 0.0), (1.0, 1.0))).unwrap();
+    small.add(&Space::Model, Common::default(), line((1e6, 1e6), (1e6 + 1.0, 1e6))).unwrap();
+    assert_eq!(small.content_extents(&Space::Model), small.extents(&Space::Model));
+}
+
+#[test]
+fn content_extents_of_an_empty_space_are_empty() {
+    assert!(Drawing::new_metric().content_extents(&Space::Model).is_empty());
+}

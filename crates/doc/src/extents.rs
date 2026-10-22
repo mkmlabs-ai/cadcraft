@@ -75,6 +75,46 @@ fn mtext_box(t: &crate::MText) -> Bounds2 {
     Bounds2::from_points(pts)
 }
 
+/// Share of the objects (by centre, per axis) that may sit outside the "core" of a drawing before
+/// [`robust_bounds`] counts them as part of it: stray objects left at the origin of a drawing
+/// that lives in a national grid (millions of units away) are the typical case.
+const OUTLIER_SHARE: f64 = 0.01;
+
+/// Bounds of the main body of `boxes`: the union of every box whose centre lies within one core
+/// span of the 1%..99% range of the centres on both axes. A handful of objects far from
+/// everything else (a few lines at 0,0 of a drawing 6 million units away) do not stretch it,
+/// while a drawing that really spreads out (no cluster) keeps its full extent. Boxes that are
+/// empty or not finite are ignored.
+pub fn robust_bounds(boxes: &[Bounds2]) -> Bounds2 {
+    let ok = |b: &Bounds2| !b.is_empty() && b.min.x.is_finite() && b.min.y.is_finite() && b.max.x.is_finite() && b.max.y.is_finite();
+    let boxes: Vec<&Bounds2> = boxes.iter().filter(|b| ok(b)).collect();
+    let n = boxes.len();
+    let all = boxes.iter().fold(Bounds2::EMPTY, |acc, b| acc.union(b));
+    if n < 20 {
+        return all;
+    }
+    // The core range of one axis' centres, widened by its own span on both sides.
+    let window = |centre: fn(&Bounds2) -> f64| -> (f64, f64) {
+        let mut c: Vec<f64> = boxes.iter().map(|b| centre(b)).collect();
+        c.sort_unstable_by(f64::total_cmp);
+        let cut = (n as f64 * OUTLIER_SHARE).ceil() as usize;
+        let lo = c.get(cut).copied().unwrap_or(f64::NEG_INFINITY);
+        let hi = c.get(n.saturating_sub(cut + 1)).copied().unwrap_or(f64::INFINITY);
+        let span = (hi - lo).max(0.0);
+        (lo - span, hi + span)
+    };
+    let (x0, x1) = window(|b| (b.min.x + b.max.x) / 2.0);
+    let (y0, y1) = window(|b| (b.min.y + b.max.y) / 2.0);
+    let core = boxes
+        .iter()
+        .filter(|b| {
+            let c = b.center();
+            c.x >= x0 && c.x <= x1 && c.y >= y0 && c.y <= y1
+        })
+        .fold(Bounds2::EMPTY, |acc, b| acc.union(b));
+    if core.is_empty() { all } else { core }
+}
+
 pub fn entity_bounds(d: &Drawing, e: &Entity, depth: usize) -> Bounds2 {
     // A top-level annotative object measures as it draws at the current annotation scale.
     if depth == 0 {
