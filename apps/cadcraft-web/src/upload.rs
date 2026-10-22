@@ -22,12 +22,13 @@ type Upload = Result<(String, Vec<u8>), String>;
 #[derive(Clone)]
 pub struct Inbox {
     files: Rc<Cell<Vec<Upload>>>,
+    lisp: Rc<Cell<Vec<(String, String)>>>,
     ctx: egui::Context,
 }
 
 impl Inbox {
     pub fn new(ctx: &egui::Context) -> Self {
-        Inbox { files: Rc::default(), ctx: ctx.clone() }
+        Inbox { files: Rc::default(), lisp: Rc::default(), ctx: ctx.clone() }
     }
 
     /// Show the browser's file picker and return at once. A chosen file arrives through
@@ -110,6 +111,14 @@ impl Inbox {
         self.push(Err(error));
     }
 
+    /// AutoLISP source received via bridge (`cadcraft:lisp`).
+    pub fn receive_lisp(&self, name: String, text: String) {
+        let mut lisp = self.lisp.take();
+        lisp.push((name, text));
+        self.lisp.set(lisp);
+        self.ctx.request_repaint();
+    }
+
     fn push(&self, upload: Upload) {
         let mut files = self.files.take();
         files.push(upload);
@@ -124,6 +133,9 @@ impl Inbox {
                 Ok((name, bytes)) => app.open_bytes(&name, &bytes),
                 Err(e) => app.open_failed(e),
             }
+        }
+        for (name, text) in self.lisp.take() {
+            app.load_lisp(&name, &text);
         }
     }
 }

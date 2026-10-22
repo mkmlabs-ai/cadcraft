@@ -4,6 +4,7 @@
 //! - `cadcraft:ready` (to the parent): `{ version }`, the app is listening; send a drawing now.
 //! - `cadcraft:open` (from the parent): `{ name, bytes }`, bytes an `ArrayBuffer` or
 //!   `Uint8Array`. It opens like a file picked with File › Open or dropped on the window.
+//! - `cadcraft:lisp` (from the parent): `{ name, text }`, loads and evaluates AutoLISP code.
 //! - `cadcraft:save` (to the parent): `{ name, bytes, label?, source? }` (a transferred `ArrayBuffer`) for every
 //!   file CADCraft would otherwise download (SAVE, SAVEAS, exports): it replaces the engine's
 //!   delivery hook. The parent stores the file and reports failures itself.
@@ -66,7 +67,7 @@ impl Bridge {
         self.send(&[("type", "cadcraft:failed".into()), ("error", error.into())]);
     }
 
-    /// Hear drawings from the parent; they arrive through the upload inbox.
+    /// Hear drawings and LISP from the parent; they arrive through the upload inbox.
     pub fn listen(&self, inbox: crate::upload::Inbox) {
         let parent = self.parent.clone();
         let origin = self.origin.clone();
@@ -75,20 +76,32 @@ impl Bridge {
                 return;
             }
             let data = event.data();
-            if string(&data, "type").as_deref() != Some("cadcraft:open") {
-                return;
+            match string(&data, "type").as_deref() {
+                Some("cadcraft:open") => {
+                    let name = string(&data, "name")
+                        .filter(|n| !n.trim().is_empty())
+                        .map(|n| n.chars().take(MAX_NAME_CHARS).collect())
+                        .unwrap_or_else(|| "Drawing.dxf".to_string());
+                    // Refuse an oversized drawing before copying it into the app's memory.
+                    let Some(array) = byte_array(&data) else { return };
+                    if let Some(e) = CadApp::open_size_error(&name, u64::from(array.length())) {
+                        inbox.refuse(e);
+                        return;
+                    }
+                    inbox.receive(name, array.to_vec());
+                }
+                Some("cadcraft:lisp") => {
+                    let name = string(&data, "name")
+                        .filter(|n| !n.trim().is_empty())
+                        .map(|n| n.chars().take(MAX_NAME_CHARS).collect())
+                        .unwrap_or_else(|| "action.lsp".to_string());
+                    let text = string(&data, "text")
+                        .or_else(|| byte_array(&data).map(|a| String::from_utf8_lossy(&a.to_vec()).into_owned()))
+                        .unwrap_or_default();
+                    inbox.receive_lisp(name, text);
+                }
+                _ => {}
             }
-            let name = string(&data, "name")
-                .filter(|n| !n.trim().is_empty())
-                .map(|n| n.chars().take(MAX_NAME_CHARS).collect())
-                .unwrap_or_else(|| "Drawing.dxf".to_string());
-            // Refuse an oversized drawing before copying it into the app's memory.
-            let Some(array) = byte_array(&data) else { return };
-            if let Some(e) = CadApp::open_size_error(&name, u64::from(array.length())) {
-                inbox.refuse(e);
-                return;
-            }
-            inbox.receive(name, array.to_vec());
         });
         if self.window.add_event_listener_with_callback("message", on_message.as_ref().unchecked_ref()).is_ok() {
             // The listener lives as long as the page.
@@ -110,11 +123,7 @@ impl Bridge {
 
     pub fn post_save_with_meta(&self, name: &str, bytes: &[u8], label: Option<&str>, source: Option<&str>) -> Result<(), String> {
         let buffer = js_sys::Uint8Array::from(bytes).buffer();
-        let mut fields: Vec<(&str, JsValue)> = vec![
-            ("type", "cadcraft:save".into()),
-            ("name", name.into()),
-            ("bytes", buffer.clone().into()),
-        ];
+        let mut fields: Vec<(&str, JsValue)> = vec![("type", "cadcraft:save".into()), ("name", name.into()), ("bytes", buffer.clone().into())];
         if let Some(l) = label {
             fields.push(("label", l.into()));
         }
@@ -149,11 +158,7 @@ pub fn deliver(name: &str, _mime: &str, bytes: &[u8]) -> Result<(), String> {
 #[allow(dead_code)]
 pub fn checkpoint(label: &str) -> Result<(), String> {
     let bridge = BRIDGE.with(|b| b.borrow().clone()).ok_or("the page that embeds CADCraft is gone")?;
-    if bridge.post_checkpoint(label) {
-        Ok(())
-    } else {
-        Err("couldn't send checkpoint to parent".to_string())
-    }
+    if bridge.post_checkpoint(label) { Ok(()) } else { Err("couldn't send checkpoint to parent".to_string()) }
 }
 
 /// Hand the file with optional label and source to the parent page.

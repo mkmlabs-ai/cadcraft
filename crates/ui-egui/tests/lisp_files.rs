@@ -64,3 +64,34 @@ fn a_canvas_click_answers_a_routine_waiting_for_a_point() {
     assert!((p[0] - target.x).abs() < 0.05 && (p[1] - target.y).abs() < 0.05, "{p:?}");
     assert!(app.session.selection().is_empty(), "the click selected nothing");
 }
+
+#[test]
+fn lisp_routine_groups_undo_into_single_step() {
+    let mut app = CadApp::new(Session::new(), Services::default());
+    let initial_count = app.session.doc().unwrap().model.len();
+    app.load_lisp(
+        "action.lsp",
+        r#"(progn
+            (command "line" '(0 0) '(10 10) "")
+            (command "circle" '(5 5) 2)
+        )"#,
+    );
+    assert_eq!(app.session.doc().unwrap().model.len(), initial_count + 2);
+    // A single undo step reverts all changes from the routine
+    app.session.cmdline("U").unwrap();
+    assert_eq!(app.session.doc().unwrap().model.len(), initial_count);
+}
+
+#[test]
+fn lisp_error_in_handler_does_not_crash_editor() {
+    let mut app = CadApp::new(Session::new(), Services::default());
+    app.load_lisp(
+        "broken_handler.lsp",
+        r#"(progn
+            (defun *error* (msg) (/ 1 0))
+            (/ 1 0)
+        )"#,
+    );
+    // Editor is alive and can execute normal commands
+    assert!(app.session.cmdline("LINE 0,0 1,1 ").is_ok());
+}
