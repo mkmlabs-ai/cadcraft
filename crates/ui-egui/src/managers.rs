@@ -1112,7 +1112,7 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
                         ui.end_row();
                     }
                 });
-                sheet_sketch(ui, &st.page, &t);
+                sheet_sketch(ui, &st, d, &t);
             });
             ui.separator();
             ui.horizontal(|ui| {
@@ -1145,7 +1145,6 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
         });
     // The output file type follows the device.
     let ext = choices.devices.iter().find(|dv| dv.name.eq_ignore_ascii_case(&st.page.device)).map_or("pdf", |dv| dv.output.as_str());
-    set_temp(ctx, "plot_state", st.clone());
     if cancel {
         *open = false;
         st.generating = false;
@@ -1155,6 +1154,7 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
         // The dialog comes back with these settings and the picked window (`plot_window_resume`).
         set_temp(ctx, PICKING_WINDOW, true);
         *open = false;
+        set_temp(ctx, "plot_state", st);
         app.start("plotwindow");
         return action;
     }
@@ -1165,6 +1165,7 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
         if st.page.landscape {
             info.push_str(&format!(" · {}", crate::tl!("landscape")));
         }
+        set_temp(ctx, "plot_state", st.clone());
         crate::exchange::preview_plot(app, ctx, plot_params(&st, Some((1600.0 / long_in).clamp(50.0, 300.0))), info);
         return action;
     }
@@ -1182,19 +1183,29 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
 
     if run_now {
         let mut params = plot_params(&st, None);
-        if let Some(pick) = app.services.pick_save.as_ref() {
-            let title = app.session.state().map(|s| s.title.clone()).unwrap_or_default();
-            let stem = std::path::Path::new(&title).file_stem().map(|s| s.to_string_lossy().to_string()).filter(|s| !s.is_empty());
-            let suggested = format!("{}-{}.{ext}", stem.unwrap_or_else(|| "Drawing".into()), st.target);
-            // Cancelling the file dialog keeps the Plot dialog open with its settings.
-            let Some(path) = pick(&suggested) else {
+        let title = app.session.state().map(|s| s.title.clone()).unwrap_or_default();
+        let stem = std::path::Path::new(&title).file_stem().map(|s| s.to_string_lossy().to_string()).filter(|s| !s.is_empty());
+        let suggested = if st.target == "Model" {
+            format!("{}.{ext}", stem.unwrap_or_else(|| "Drawing".into()))
+        } else {
+            format!("{}-{}.{ext}", stem.unwrap_or_else(|| "Drawing".into()), st.target)
+        };
+        let path = match app.services.pick_save.as_ref() {
+            Some(pick) => pick(&suggested),
+            None if cfg!(target_arch = "wasm32") => Some(suggested.clone()),
+            None => None,
+        };
+        let path = match path {
+            Some(p) => p,
+            None if app.services.pick_save.is_some() => {
                 st.generating = false;
                 set_temp(ctx, "plot_state", st);
                 return action;
-            };
-            if let Some(o) = params.as_object_mut() {
-                o.insert("path".into(), json!(path));
             }
+            None => suggested,
+        };
+        if let Some(o) = params.as_object_mut() {
+            o.insert("path".into(), json!(path));
         }
         *open = false;
         match app.run("plot", params) {
@@ -1215,22 +1226,68 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
             }
         }
     }
+    set_temp(ctx, "plot_state", st);
     action
 }
 
 /// The sheet in the chosen orientation with its printable area, and its size.
-fn sheet_sketch(ui: &mut egui::Ui, page: &cadcraft_doc::PageSetup, t: &Tokens) {
+fn sheet_sketch(ui: &mut egui::Ui, st: &PlotState, d: &cadcraft_doc::Drawing, t: &Tokens) {
+    let page = &st.page;
     let (w, h) = if page.landscape { (page.height_mm, page.width_mm) } else { (page.width_mm, page.height_mm) };
     ui.vertical(|ui| {
         let (rect, _) = ui.allocate_exact_size(vec2(120.0, 120.0), Sense::hover());
         let k = (110.0 / w.max(h).max(1.0)) as f32;
         let sheet = egui::Rect::from_center_size(rect.center(), vec2(w as f32 * k, h as f32 * k));
-        ui.painter().rect_filled(sheet, 0.0, t.field);
-        ui.painter().rect_stroke(sheet, 0.0, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+        ui.painter().rect_filled(sheet, 2.0, egui::Color32::from_rgb(245, 247, 250));
+        ui.painter().rect_stroke(sheet, 2.0, Stroke::new(1.0, egui::Color32::from_rgb(170, 175, 185)), egui::StrokeKind::Inside);
         let [l, b, r, top] = page.margins_mm.map(|m| m as f32 * k);
         let printable = egui::Rect::from_min_max(sheet.min + vec2(l, top), sheet.max - vec2(r, b));
         if printable.is_positive() {
-            ui.painter().rect_stroke(printable, 0.0, Stroke::new(1.0, t.accent), egui::StrokeKind::Inside);
+            ui.painter().rect_stroke(printable, 1.0, Stroke::new(1.0, egui::Color32::from_rgb(205, 210, 220)), egui::StrokeKind::Inside);
+
+            let bounds = if st.target == "Model" {
+                match page.plot_area.as_str() {
+                    "window" => {
+                        let [x1, y1, x2, y2] = st.window;
+                        cadcraft_geom::Bounds2::new(cadcraft_geom::Vec2::new(x1, y1), cadcraft_geom::Vec2::new(x2, y2))
+                    }
+                    "limits" => {
+                        let lo = d.header.point("LIMMIN").map(|p| p.xy()).unwrap_or(cadcraft_geom::Vec2::ZERO);
+                        let hi = d.header.point("LIMMAX").map(|p| p.xy()).unwrap_or(cadcraft_geom::Vec2::new(12.0, 9.0));
+                        cadcraft_geom::Bounds2::new(lo, hi)
+                    }
+                    _ => d.extents(&cadcraft_doc::Space::Model),
+                }
+            } else {
+                cadcraft_geom::Bounds2::EMPTY
+            };
+
+            let pw_mm = w - page.margins_mm[0] - page.margins_mm[2];
+            let ph_mm = h - page.margins_mm[1] - page.margins_mm[3];
+            if pw_mm > 0.0 && ph_mm > 0.0 {
+                let (content_w_mm, content_h_mm, off_x_mm, off_y_mm) = if bounds.is_empty() || bounds.width() <= 1e-9 || bounds.height() <= 1e-9 {
+                    (pw_mm, ph_mm, 0.0, 0.0)
+                } else {
+                    let unit_mm = cadcraft_render::paper::page_unit_mm(d, page);
+                    let scale = if page.scale_to_fit { (pw_mm / bounds.width()).min(ph_mm / bounds.height()) } else { page.scale * unit_mm };
+                    let cw = (bounds.width() * scale).clamp(1.0, pw_mm * 2.0);
+                    let ch = (bounds.height() * scale).clamp(1.0, ph_mm * 2.0);
+                    let (ox, oy) = if st.center { ((pw_mm - cw) / 2.0, (ph_mm - ch) / 2.0) } else { (st.offset_mm[0], st.offset_mm[1]) };
+                    (cw, ch, ox, oy)
+                };
+
+                let content_min = sheet.min + vec2((page.margins_mm[0] + off_x_mm) as f32 * k, (page.margins_mm[3] + off_y_mm) as f32 * k);
+                let content_rect = egui::Rect::from_min_size(content_min, vec2(content_w_mm as f32 * k, content_h_mm as f32 * k));
+                let clipped = content_rect.intersect(printable);
+                if clipped.is_positive() {
+                    ui.painter().rect_filled(clipped, 1.0, egui::Color32::from_rgba_unmultiplied(59, 130, 246, 50));
+                    ui.painter().rect_stroke(clipped, 1.0, Stroke::new(1.0, egui::Color32::from_rgb(59, 130, 246)), egui::StrokeKind::Inside);
+                    let center = clipped.center();
+                    let stroke_subtle = Stroke::new(0.5, egui::Color32::from_rgba_unmultiplied(59, 130, 246, 120));
+                    ui.painter().line_segment([egui::pos2(clipped.min.x + 4.0, center.y), egui::pos2(clipped.max.x - 4.0, center.y)], stroke_subtle);
+                    ui.painter().line_segment([egui::pos2(center.x, clipped.min.y + 4.0), egui::pos2(center.x, clipped.max.y - 4.0)], stroke_subtle);
+                }
+            }
         }
         ui.label(RichText::new(format!("{w:.1} × {h:.1} mm")).color(t.text_dim));
     });
@@ -1315,7 +1372,7 @@ mod plot_dialog_tests {
     fn state(target: &str) -> PlotState {
         let d = cadcraft_doc::Drawing::new_metric();
         PlotState {
-            generation: 0,
+            generation: PLOT_GEN.load(Ordering::Relaxed),
             page: plot_page(&d, target),
             target: target.into(),
             window: [0.0, 0.0, 10.0, 10.0],
@@ -1425,5 +1482,75 @@ mod plot_dialog_tests {
         plot_window_resume(&mut app, &ctx);
         assert_eq!(app.ui.dialog.as_deref(), Some("plot"));
         assert_eq!(temp::<PlotState>(&ctx, "plot_state").unwrap().window, [2.0, 3.0, 12.0, 9.0]);
+    }
+
+    fn fake_plot_hook(_: &cadcraft_doc::Drawing, _: &cadcraft_doc::Space, _: &serde_json::Value) -> Result<Vec<u8>, String> {
+        Ok(b"%PDF-1.4 fake pdf data".to_vec())
+    }
+
+    #[test]
+    fn plot_dialog_suggests_drawing_name_for_model_and_delivers() {
+        cadcraft_engine::cmd::file::set_io(cadcraft_engine::cmd::file::IoHooks {
+            read: |_, _| Err("no reader".into()),
+            write: |_, _| Err("no writer".into()),
+            plot: Some(fake_plot_hook),
+        });
+
+        let picked_suggested = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let p_clone = picked_suggested.clone();
+        let tmp_dir = std::env::temp_dir().join(format!("cadcraft-plot-test-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&tmp_dir);
+        let tmp_path = tmp_dir.clone();
+
+        let mut app = CadApp::new(
+            Session::new(),
+            crate::Services {
+                pick_save: Some(Box::new(move |suggested: &str| {
+                    *p_clone.lock().unwrap() = suggested.to_string();
+                    Some(tmp_path.join(suggested).to_string_lossy().to_string())
+                })),
+                ..Default::default()
+            },
+        );
+        let mut d = cadcraft_doc::Drawing::new_metric();
+        let k = cadcraft_doc::EntityKind::Line(cadcraft_doc::Line {
+            a: cadcraft_geom::Vec3::new(6453636.0, 5947085.0, 0.0),
+            b: cadcraft_geom::Vec3::new(6456786.0, 5949312.0, 0.0),
+        });
+        d.add(&cadcraft_doc::Space::Model, cadcraft_doc::Common::default(), k).unwrap();
+        app.session.open_drawing(d, "Blizniaki Wypoczynkowa", None);
+
+        let ctx = egui::Context::default();
+        let mut open = true;
+        app.ui.dialog = Some("plot".into());
+
+        let mut st = state("Model");
+        st.window = [6453636.0, 5947085.0, 6456786.0, 5949312.0];
+        st.page.plot_area = "window".into();
+        set_temp(&ctx, "plot_state", st);
+
+        set_flag(&ctx, PLOT_NOW, true);
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0))), ..Default::default() };
+        let mut output = ctx.run_ui(raw.clone(), |_| {
+            plot(&mut app, &ctx, &mut open);
+        });
+        output.textures_delta.clear();
+
+        let st2 = temp::<PlotState>(&ctx, "plot_state").unwrap();
+        assert!(st2.generating, "first frame after OK must set generating=true");
+
+        let mut output2 = ctx.run_ui(raw, |_| {
+            plot(&mut app, &ctx, &mut open);
+        });
+        output2.textures_delta.clear();
+        let st3 = temp::<PlotState>(&ctx, "plot_state").unwrap();
+        assert_eq!(st3.error, None, "plot error: {:?}", st3.error);
+        assert!(!open, "dialog must close after successful plot");
+
+        let suggested = picked_suggested.lock().unwrap().clone();
+        assert_eq!(suggested, "Blizniaki Wypoczynkowa.pdf", "must suggest <name>.pdf for model space");
+        let target_file = tmp_dir.join("Blizniaki Wypoczynkowa.pdf");
+        assert!(target_file.exists(), "file must be written to destination");
+        let _ = std::fs::remove_dir_all(&tmp_dir);
     }
 }

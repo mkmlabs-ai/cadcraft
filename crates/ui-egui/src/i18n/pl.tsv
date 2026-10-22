@@ -1497,3 +1497,12 @@ menu	View	Widok
 @plural	{n} contributor	{n} współtwórca|{n} współtwórcy|{n} współtwórców
 	Zoom Content	Zoom zawartość
 	Content	Zawartość
+	the plot area is empty	obszar wydruku jest pusty
+	`plotArea` window needs `window`: [[x1, y1], [x2, y2]]	obszar wydruku okno wymaga narożników: [[x1, y1], [x2, y2]]
+	there are no sheets to plot	brak arkuszy do wydruku
+	the sheet is too large to plot as an image	arkusz jest za duży, aby wydrukować jako obraz
+	render failed	błąd renderowania
+	a file name is required	wymagana jest nazwa pliku
+	model-space plot offsets are not supported for SVG; choose PDF/PNG or center the plot	przesunięcia wydruku przestrzeni modelu nie są obsługiwane dla SVG; wybierz PDF/PNG lub wyśrodkuj wydruk
+	plot offset must contain two finite values within ±100000 mm	przesunięcie wydruku musi zawierać dwie skończone wartości w granicach ±100000 mm
+	`scale` must be positive: paper units per drawing unit, or a ratio such as "1:50"	skala musi być dodatnia: jednostki papieru na jednostkę rysunku lub proporcja, np. "1:50"
