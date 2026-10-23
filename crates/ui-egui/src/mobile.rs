@@ -24,7 +24,7 @@ pub const COMPACT_BREAKPOINT: f32 = 760.0;
 pub const TOUCH_MIN: f32 = 44.0;
 
 /// Bottom toolbar height.
-pub const BOTTOM_BAR_H: f32 = 56.0;
+pub const BOTTOM_BAR_H: f32 = 48.0;
 
 /// Top bar height in compact mode.
 pub const TOP_BAR_H: f32 = 40.0;
@@ -46,6 +46,7 @@ pub enum Sheet {
     UndoRedo,
     More,
     CommandLine,
+    Menu,
 }
 
 /// Whether the UI should be in compact mode right now.
@@ -72,21 +73,21 @@ pub fn top_bar(app: &mut CadApp, ui: &mut egui::Ui) {
         let x = (r.center().x - galley.size().x / 2.0).max(r.left() + 48.0);
         ui.painter().galley(pos2(x, r.center().y - galley.size().y / 2.0), galley, t.text);
 
-        // Hamburger / menu button on the left.
+        // Hamburger / menu button on the left (opens the compact menu sheet).
         let btn = Rect::from_min_size(pos2(r.left() + 4.0, r.top() + 2.0), vec2(36.0, 36.0));
         let resp = ui.interact(btn, ui.id().with("mobile_menu"), Sense::click());
         if resp.hovered() {
             ui.painter().rect_filled(btn, 4.0, t.control_hover.gamma_multiply(0.5));
         }
         icons::paint(ui.painter(), btn.shrink(8.0), Icon::Menu, false);
-        icons::describe_control(ui, &resp, crate::tl!("Menu"), None, false);
+        icons::describe_control(ui, &resp, "Menu", None, false);
         if resp.clicked() {
-            app.ui.in_window_menu = !app.ui.in_window_menu;
+            app.ui.mobile_sheet = if app.ui.mobile_sheet == Sheet::Menu { Sheet::None } else { Sheet::Menu };
         }
 
         // Quick command-line button and undo/redo on the right.
         let mut rx = r.right() - 6.0;
-        for (icon, cmd, tip) in [(Icon::Redo, "redo", crate::tl!("Redo")), (Icon::Undo, "u", crate::tl!("Undo"))] {
+        for (icon, cmd, tip) in [(Icon::Redo, "redo", "Redo"), (Icon::Undo, "u", "Undo")] {
             rx -= 36.0;
             let br = Rect::from_min_size(pos2(rx, r.top() + 2.0), vec2(34.0, 36.0));
             let resp = ui.interact(br, ui.id().with(("mobile_tb", cmd)), Sense::click());
@@ -108,7 +109,7 @@ pub fn top_bar(app: &mut CadApp, ui: &mut egui::Ui) {
             ui.painter().rect_filled(cmd_br, 4.0, t.control_hover.gamma_multiply(0.5));
         }
         ui.painter().text(cmd_br.center(), egui::Align2::CENTER_CENTER, ">_", crate::theme::mono(), t.text);
-        icons::describe_control(ui, &cmd_resp, crate::tl!("Command Line"), None, false);
+        icons::describe_control(ui, &cmd_resp, "Command Line", None, false);
         if cmd_resp.clicked() {
             app.ui.mobile_sheet = if app.ui.mobile_sheet == Sheet::CommandLine { Sheet::None } else { Sheet::CommandLine };
         }
@@ -130,16 +131,18 @@ const BOTTOM_ITEMS: &[(Icon, &str, Sheet)] = &[
 /// Bottom toolbar with large touch-friendly icons (min 44 px).
 pub fn bottom_toolbar(ui: &mut egui::Ui, open_sheet: &mut Sheet) {
     let t = Tokens::get();
-    egui::Panel::bottom("cc_mobile_bottom").exact_size(BOTTOM_BAR_H).frame(egui::Frame::NONE.fill(t.chrome)).show(ui, |ui| {
+    let is_landscape = ui.available_width() > ui.available_height() && ui.available_height() < 500.0;
+    let bar_h = if is_landscape { 44.0 } else { BOTTOM_BAR_H };
+    egui::Panel::bottom("cc_mobile_bottom").exact_size(bar_h).frame(egui::Frame::NONE.fill(t.chrome)).show(ui, |ui| {
         let r = ui.max_rect();
+        let avail_w = r.width();
+        let show_labels = avail_w >= 400.0;
         let n = BOTTOM_ITEMS.len() as f32;
-        let item_w = (r.width() / n).max(TOUCH_MIN);
-        let total = item_w * n;
-        let mut x = r.left() + (r.width() - total).max(0.0) / 2.0;
+        let item_w = avail_w / n;
 
-        for (icon, label, sheet) in BOTTOM_ITEMS {
+        for (i, (icon, label, sheet)) in BOTTOM_ITEMS.iter().enumerate() {
             let active = *open_sheet == *sheet;
-            let br = Rect::from_min_size(pos2(x, r.top()), vec2(item_w, r.height()));
+            let br = Rect::from_min_size(pos2(r.left() + i as f32 * item_w, r.top()), vec2(item_w, r.height()));
             let resp = ui.interact(br, ui.id().with(("mob_bt", *label)), Sense::click());
 
             if active {
@@ -148,25 +151,33 @@ pub fn bottom_toolbar(ui: &mut egui::Ui, open_sheet: &mut Sheet) {
                 ui.painter().rect_filled(br, 0.0, t.control_hover.gamma_multiply(0.4));
             }
 
-            let icon_size = 24.0;
-            let icon_rect = Rect::from_center_size(pos2(br.center().x, br.top() + 6.0 + icon_size / 2.0), vec2(icon_size, icon_size));
+            let icon_size = if show_labels { 20.0 } else { 24.0 };
+            let icon_y = if show_labels { br.top() + 4.0 + icon_size / 2.0 } else { br.center().y };
+            let icon_rect = Rect::from_center_size(pos2(br.center().x, icon_y), vec2(icon_size, icon_size));
             icons::paint(ui.painter(), icon_rect, *icon, false);
 
-            let translated = crate::i18n::t(label);
-            ui.painter().text(
-                pos2(br.center().x, br.bottom() - 6.0),
-                egui::Align2::CENTER_BOTTOM,
-                translated,
-                egui::FontId::proportional(10.0),
-                if active { t.toggle_on } else { t.text_dim },
-            );
+            let label_key = match *label {
+                "Properties" if avail_w < 600.0 => "Props",
+                "Undo / Redo" if avail_w < 600.0 => "Undo",
+                other => other,
+            };
+            let translated = crate::i18n::t(label_key);
 
-            icons::describe_control(ui, &resp, translated, Some(active), false);
+            if show_labels {
+                ui.painter().text(
+                    pos2(br.center().x, br.bottom() - 3.0),
+                    egui::Align2::CENTER_BOTTOM,
+                    translated,
+                    egui::FontId::proportional(10.0),
+                    if active { t.toggle_on } else { t.text_dim },
+                );
+            }
+
+            icons::describe_control(ui, &resp, label_key, Some(active), false);
 
             if resp.clicked() {
                 *open_sheet = if active { Sheet::None } else { *sheet };
             }
-            x += item_w;
         }
     });
 }
@@ -184,6 +195,7 @@ pub fn bottom_sheet(app: &mut CadApp, ui: &mut egui::Ui, sheet: Sheet) {
         Sheet::UndoRedo => 220.0_f32.min(max_h),
         Sheet::Measure => 200.0_f32.min(max_h),
         Sheet::More => 260.0_f32.min(max_h),
+        Sheet::Menu => 340.0_f32.min(max_h),
         _ => 320.0_f32.min(max_h),
     };
 
@@ -202,7 +214,7 @@ pub fn bottom_sheet(app: &mut CadApp, ui: &mut egui::Ui, sheet: Sheet) {
                 ui.painter().rect_filled(close_r, 4.0, t.control_hover.gamma_multiply(0.5));
             }
             icons::paint(ui.painter(), close_r.shrink(6.0), Icon::Close, false);
-            icons::describe_control(ui, &close_resp, crate::tl!("Close"), None, false);
+            icons::describe_control(ui, &close_resp, "Close", None, false);
             if close_resp.clicked() {
                 app.ui.mobile_sheet = Sheet::None;
                 return;
@@ -219,6 +231,7 @@ pub fn bottom_sheet(app: &mut CadApp, ui: &mut egui::Ui, sheet: Sheet) {
                 Sheet::UndoRedo => undo_redo_sheet(app, ui),
                 Sheet::More => more_sheet(app, ui),
                 Sheet::CommandLine => command_line_sheet(app, ui),
+                Sheet::Menu => menu_sheet(app, ui),
                 Sheet::None => {}
             }
         },
@@ -549,16 +562,61 @@ pub fn compact_file_tabs(app: &mut CadApp, ui: &mut egui::Ui) {
     });
 }
 
+/// Menu sheet: replaces the desktop top menu bar in compact mode with a clean touch-friendly list.
+fn menu_sheet(app: &mut CadApp, ui: &mut egui::Ui) {
+    let t = Tokens::get();
+    ui.label(egui::RichText::new(crate::tl!("Menu")).strong().size(14.0));
+    ui.add_space(4.0);
+    let mut chosen_cmd: Option<&'static str> = None;
+
+    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+        let sections: &[(&str, &[(&str, &'static str)])] = &[
+            (
+                "File",
+                &[
+                    ("New Drawing", "new"),
+                    ("Open...", "open"),
+                    ("Save", "qsave"),
+                    ("Save As...", "saveas"),
+                    ("Export PDF...", "exportpdf"),
+                    ("Plot...", "plot"),
+                ],
+            ),
+            ("Edit", &[("Undo", "u"), ("Redo", "redo"), ("Erase", "erase"), ("Select All", "ai_selall")]),
+            ("View", &[("Zoom Extents", "zoom.extents"), ("Zoom All", "zoom.all"), ("Pan", "pan")]),
+            ("Tools", &[("Options...", "options"), ("Drawing Units...", "units"), ("About CADCraft", "ui.dialog.about")]),
+        ];
+
+        for (section_title, items) in sections {
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new(crate::i18n::t(section_title)).color(t.accent).size(12.0).strong());
+            for (label, cmd) in *items {
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
+                if resp.hovered() {
+                    ui.painter().rect_filled(rect, 4.0, t.control_hover.gamma_multiply(0.4));
+                }
+                let translated = crate::i18n::t(label);
+                ui.painter().text(pos2(rect.left() + 12.0, rect.center().y), egui::Align2::LEFT_CENTER, translated, crate::theme::body(), t.text);
+                icons::describe_control(ui, &resp, label, None, false);
+                if resp.clicked() {
+                    chosen_cmd = Some(cmd);
+                }
+            }
+        }
+    });
+
+    if let Some(cmd) = chosen_cmd {
+        app.cmd.buffer.clear();
+        app.start(cmd);
+        app.ui.mobile_sheet = Sheet::None;
+    }
+}
+
 /// The full compact-mode draw method: replaces the desktop `draw` when compact mode is active.
 pub fn draw_compact(app: &mut CadApp, ui: &mut egui::Ui) {
     let t = Tokens::get();
     crate::control::begin_frame(ui.ctx());
     top_bar(app, ui);
-
-    // Menu bar (toggled by hamburger).
-    if app.ui.in_window_menu {
-        crate::menus::menu_bar(app, ui);
-    }
 
     // Compact file/layout tabs.
     if app.ui.show_file_tabs {
@@ -571,11 +629,12 @@ pub fn draw_compact(app: &mut CadApp, ui: &mut egui::Ui) {
     bottom_sheet(app, ui, sheet);
     app.ui.mobile_sheet = sheet;
 
-    // Central drawing area: full screen, no side panels.
+    // Central drawing area: full screen, completely free of desktop side docks.
     let has_doc = !app.session.docs.is_empty() && !app.ui.start_tab;
     egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.canvas)).show(ui, |ui| {
         if has_doc {
-            crate::docking::show(app, ui);
+            ui.painter().rect_filled(ui.max_rect(), 0.0, t.canvas);
+            crate::canvas::show(app, ui);
         } else {
             crate::chrome::start_page(app, ui);
         }

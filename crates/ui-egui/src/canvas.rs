@@ -2047,14 +2047,16 @@ pub fn show(app: &mut CadApp, ui: &mut egui::Ui) {
         draw_ucs_icon(&painter, rect);
         crate::viewcube::ucs_icon(app, ui, rect);
     }
-    if app.ui.show_viewcube && sheet.is_none() {
+    if app.ui.show_viewcube && sheet.is_none() && !crate::mobile::is_compact(ui.ctx()) {
         draw_viewcube(app, ui, rect);
     }
-    viewport_label(&painter, rect);
+    if !crate::mobile::is_compact(ui.ctx()) {
+        viewport_label(&painter, rect);
+    }
     // Typing and Escape reach the command line even when its overlay is hidden.
     crate::cmdline::keyboard(app, ui.ctx());
-    // Command line overlay.
-    if app.ui.show_command_line {
+    // Command line overlay: suppressed in compact mode where it lives in the bottom sheet.
+    if app.ui.show_command_line && !crate::mobile::is_compact(ui.ctx()) {
         crate::cmdline::show(app, ui, full);
     }
     // Crosshair cursor.

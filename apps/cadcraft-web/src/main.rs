@@ -132,6 +132,27 @@ mod web {
                         if let Some(prefs) = cc.storage.and_then(|s| s.get_string(cadcraft_ui_egui::PREFS_KEY)) {
                             app.load_prefs(&prefs);
                         }
+                        if let Some(l) = query_param("lang") {
+                            if let Some(code) = cadcraft_ui_egui::i18n::locale_language(&l) {
+                                if let Some(pref) = cadcraft_ui_egui::i18n::Preference::parse(code) {
+                                    app.ui.interface_language = pref;
+                                }
+                            }
+                        }
+                        if let Some(s) = query_param("sheet") {
+                            app.ui.mobile_sheet = match s.to_ascii_lowercase().as_str() {
+                                "draw" | "rysuj" => cadcraft_ui_egui::mobile::Sheet::Draw,
+                                "modify" | "zmien" => cadcraft_ui_egui::mobile::Sheet::Modify,
+                                "layers" | "warstwy" => cadcraft_ui_egui::mobile::Sheet::Layers,
+                                "properties" | "wlasciwosci" => cadcraft_ui_egui::mobile::Sheet::Properties,
+                                "measure" | "pomiar" => cadcraft_ui_egui::mobile::Sheet::Measure,
+                                "undoredo" | "cofnij" => cadcraft_ui_egui::mobile::Sheet::UndoRedo,
+                                "more" | "wiecej" => cadcraft_ui_egui::mobile::Sheet::More,
+                                "menu" => cadcraft_ui_egui::mobile::Sheet::Menu,
+                                "cmd" | "commandline" => cadcraft_ui_egui::mobile::Sheet::CommandLine,
+                                _ => cadcraft_ui_egui::mobile::Sheet::None,
+                            };
+                        }
                         // `?cpu`: no render state for the app, so the canvas draws with egui shapes.
                         if !crate::wants_cpu(&query())
                             && let Some(rs) = &cc.wgpu_render_state
