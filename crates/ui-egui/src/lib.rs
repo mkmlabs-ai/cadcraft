@@ -65,6 +65,51 @@ pub const PREFS_KEY: &str = "cadcraft.prefs";
 /// How many recently opened drawings are kept (AutoCAD's default for its file history).
 pub const RECENT_FILES: usize = 9;
 
+/// A drawing the embedding page lists as recently opened (`cadcraft:recent` in host mode).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HostRecentItem {
+    /// Opaque identifier the host uses to open this drawing.
+    pub id: String,
+    /// Display name shown on the Start page.
+    pub name: String,
+    /// Last-modified time as an ISO 8601 string, or empty when unknown.
+    #[serde(default)]
+    pub updated: String,
+    /// File size in bytes, or `None` when unknown.
+    #[serde(default)]
+    pub size: Option<u64>,
+}
+
+/// Parses a JSON string for a `cadcraft:recent` message.
+pub fn parse_host_recent_json(json_str: &str) -> Option<Vec<HostRecentItem>> {
+    let value: serde_json::Value = serde_json::from_str(json_str).ok()?;
+    parse_host_recent_value(&value)
+}
+
+/// Parses a `serde_json::Value` for a `cadcraft:recent` message.
+pub fn parse_host_recent_value(value: &serde_json::Value) -> Option<Vec<HostRecentItem>> {
+    if value.get("type").and_then(|t| t.as_str()) != Some("cadcraft:recent") {
+        return None;
+    }
+    let items = value.get("items")?.as_array()?;
+    Some(parse_host_recent(items))
+}
+
+/// Parses a JSON array of `{id, name, updated, size}` objects into [`HostRecentItem`]s.
+/// Malformed entries without `id` or `name` are skipped.
+pub fn parse_host_recent(items: &[serde_json::Value]) -> Vec<HostRecentItem> {
+    items
+        .iter()
+        .filter_map(|v| {
+            let id = v.get("id")?.as_str().filter(|s| !s.trim().is_empty())?;
+            let name = v.get("name")?.as_str().filter(|s| !s.trim().is_empty())?;
+            let updated = v.get("updated").and_then(serde_json::Value::as_str).unwrap_or("");
+            let size = v.get("size").and_then(serde_json::Value::as_u64);
+            Some(HostRecentItem { id: id.to_string(), name: name.to_string(), updated: updated.to_string(), size })
+        })
+        .collect()
+}
+
 /// Persisted UI state (serde, so automation can read and set it).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -252,6 +297,15 @@ pub struct CadApp {
     pub hatch_dlg: Option<hatchdlg::HatchDlgState>,
     /// The Edit Block Definition dialog ([`bedit`]).
     pub bedit: bedit::State,
+    /// Drawings listed by the embedding page (host mode); shown on the Start page instead of the
+    /// local recent-files list when non-empty.
+    pub host_recent: Vec<HostRecentItem>,
+    /// Callback the Start page invokes when the user clicks a host-provided recent item; the
+    /// argument is the item's `id`. `None` outside host mode.
+    pub on_request_open: Option<Box<dyn Fn(&str)>>,
+    /// The active-document name last reported to the host (`None` until the first report).
+    /// Compared each frame so `cadcraft:active` is sent only on change.
+    pub reported_active: Option<String>,
 }
 
 impl CadApp {
@@ -292,6 +346,9 @@ impl CadApp {
             alias_dlg: None,
             hatch_dlg: None,
             bedit: bedit::State::default(),
+            host_recent: Vec::new(),
+            on_request_open: None,
+            reported_active: None,
         }
     }
 
@@ -486,6 +543,9 @@ impl CadApp {
     /// picker, a dropped file). Runs OPEN with `{data, name}` as [`Self::open_path`] runs it with
     /// `{path}`; failures show on the command line and in the status bar.
     pub fn open_bytes(&mut self, name: &str, bytes: &[u8]) {
+        if self.switch_to_existing(name) {
+            return;
+        }
         if let Some(e) = Self::open_size_error(name, bytes.len() as u64) {
             return self.open_failed(e);
         }
@@ -495,6 +555,13 @@ impl CadApp {
         let data = cadcraft_engine::cmd::file::base64_encode(bytes);
         let r = self.run("open", json!({ "data": data, "name": name }));
         self.opened(r);
+    }
+
+    /// Invoke host service to request opening a drawing by its host id.
+    pub fn request_open(&self, id: &str) {
+        if let Some(cb) = &self.on_request_open {
+            cb(id);
+        }
     }
 
     /// Report a file that could not be opened before OPEN ran (unreadable, too large) as a failed
@@ -534,6 +601,30 @@ impl CadApp {
         recent.retain(|p| *p != path);
         recent.insert(0, path);
         recent.truncate(RECENT_FILES);
+    }
+
+    /// The name of the active document for the embedding host, or an empty string when the Start
+    /// tab is shown (or there are no documents). Used to post `cadcraft:active`.
+    pub fn active_name_for_host(&self) -> String {
+        if self.ui.start_tab || self.session.docs.is_empty() {
+            String::new()
+        } else {
+            self.session.state().map(|st| st.title.clone()).unwrap_or_default()
+        }
+    }
+
+    /// If a document with `name` is already open, switch to its tab and return `true`.
+    pub fn switch_to_existing(&mut self, name: &str) -> bool {
+        let base_name = std::path::Path::new(name).file_name().and_then(|n| n.to_str()).unwrap_or(name);
+        if let Some(i) = self.session.docs.iter().position(|d| {
+            let doc_base = std::path::Path::new(&d.title).file_name().and_then(|n| n.to_str()).unwrap_or(&d.title);
+            d.title == name || d.title == base_name || doc_base == base_name
+        }) {
+            let _ = self.run("document.switch", json!({ "index": i }));
+            self.ui.start_tab = false;
+            return true;
+        }
+        false
     }
 
     /// Per-frame logic before layout.

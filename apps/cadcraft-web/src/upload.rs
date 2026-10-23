@@ -23,12 +23,13 @@ type Upload = Result<(String, Vec<u8>), String>;
 pub struct Inbox {
     files: Rc<Cell<Vec<Upload>>>,
     lisp: Rc<Cell<Vec<(String, String)>>>,
+    recent: Rc<Cell<Option<Vec<cadcraft_ui_egui::HostRecentItem>>>>,
     ctx: egui::Context,
 }
 
 impl Inbox {
     pub fn new(ctx: &egui::Context) -> Self {
-        Inbox { files: Rc::default(), lisp: Rc::default(), ctx: ctx.clone() }
+        Inbox { files: Rc::default(), lisp: Rc::default(), recent: Rc::default(), ctx: ctx.clone() }
     }
 
     /// Show the browser's file picker and return at once. A chosen file arrives through
@@ -119,6 +120,12 @@ impl Inbox {
         self.ctx.request_repaint();
     }
 
+    /// Host recent items received via bridge (`cadcraft:recent`).
+    pub fn receive_recent(&self, items: Vec<cadcraft_ui_egui::HostRecentItem>) {
+        self.recent.set(Some(items));
+        self.ctx.request_repaint();
+    }
+
     fn push(&self, upload: Upload) {
         let mut files = self.files.take();
         files.push(upload);
@@ -136,6 +143,9 @@ impl Inbox {
         }
         for (name, text) in self.lisp.take() {
             app.load_lisp(&name, &text);
+        }
+        if let Some(items) = self.recent.take() {
+            app.host_recent = items;
         }
     }
 }

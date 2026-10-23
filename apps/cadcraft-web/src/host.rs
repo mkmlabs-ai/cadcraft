@@ -3,7 +3,13 @@
 //!
 //! - `cadcraft:ready` (to the parent): `{ version }`, the app is listening; send a drawing now.
 //! - `cadcraft:open` (from the parent): `{ name, bytes }`, bytes an `ArrayBuffer` or
-//!   `Uint8Array`. It opens like a file picked with File › Open or dropped on the window.
+//!   `Uint8Array`. It opens like a file picked with File > Open or dropped on the window.
+//! - `cadcraft:recent` (from the parent): `{ items: [{ id, name, updated, size }] }`, drawings
+//!   from the user's account shown on the Start page under Recent.
+//! - `cadcraft:request-open` (to the parent): `{ id }`, requests the parent to open the recent
+//!   item with this identifier.
+//! - `cadcraft:active` (to the parent): `{ name }`, sent whenever the active document tab changes
+//!   (empty string for the Start tab).
 //! - `cadcraft:lisp` (from the parent): `{ name, text }`, loads and evaluates AutoLISP code.
 //! - `cadcraft:save` (to the parent): `{ name, bytes, label?, source? }` (a transferred `ArrayBuffer`) for every
 //!   file CADCraft would otherwise download (SAVE, SAVEAS, exports): it replaces the engine's
@@ -41,6 +47,10 @@ pub struct Bridge {
 /// The unsaved-changes state last reported to the parent.
 #[derive(Default)]
 pub struct DirtyReport(Cell<Option<bool>>);
+
+/// The active document name last reported to the parent.
+#[derive(Default)]
+pub struct ActiveReport(Cell<Option<String>>);
 
 impl Bridge {
     /// `None` when the page isn't framed (there is no parent to talk to).
@@ -90,6 +100,14 @@ impl Bridge {
                     }
                     inbox.receive(name, array.to_vec());
                 }
+                Some("cadcraft:recent") => {
+                    if let Ok(json_val) = js_sys::JSON::stringify(&data) {
+                        let s: String = json_val.into();
+                        if let Some(items) = cadcraft_ui_egui::parse_host_recent_json(&s) {
+                            inbox.receive_recent(items);
+                        }
+                    }
+                }
                 Some("cadcraft:lisp") => {
                     let name = string(&data, "name")
                         .filter(|n| !n.trim().is_empty())
@@ -115,6 +133,27 @@ impl Bridge {
         if reported.0.get() != Some(dirty) && self.send(&[("type", "cadcraft:dirty".into()), ("dirty", dirty.into())]) {
             reported.0.set(Some(dirty));
         }
+    }
+
+    /// After each frame: tell the parent when the active document tab changes.
+    pub fn report_active(&self, app: &CadApp, reported: &ActiveReport) {
+        let active = app.active_name_for_host();
+        let current_reported = reported.0.take();
+        let changed = current_reported.as_deref() != Some(&active);
+        if changed {
+            if self.send(&[("type", "cadcraft:active".into()), ("name", active.as_str().into())]) {
+                reported.0.set(Some(active));
+            } else {
+                reported.0.set(current_reported);
+            }
+        } else {
+            reported.0.set(current_reported);
+        }
+    }
+
+    /// Post a request to the parent to open the recent drawing with `id`.
+    pub fn post_request_open(&self, id: &str) -> bool {
+        self.send(&[("type", "cadcraft:request-open".into()), ("id", id.into())])
     }
 
     fn post_save(&self, name: &str, bytes: &[u8]) -> Result<(), String> {

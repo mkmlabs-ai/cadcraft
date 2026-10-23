@@ -549,25 +549,53 @@ pub fn start_page(app: &mut CadApp, ui: &mut egui::Ui) {
     let main = Rect::from_min_max(pos2(left.right() + 36.0, r.top() + 40.0), r.max);
     p.text(main.min, egui::Align2::LEFT_TOP, crate::tl!("Recent"), egui::FontId::proportional(22.0), t.text);
     let mut recent = None;
+    let mut host_open_id = None;
     let mut y = main.top() + 44.0;
-    for (i, path) in app.ui.recent_files.iter().enumerate() {
-        let row = Rect::from_min_size(pos2(main.left(), y), vec2((r.right() - main.left() - 36.0).clamp(0.0, 640.0), 42.0));
-        let resp = ui.interact(row, ui.id().with(("recent", i)), Sense::click());
-        if resp.hovered() {
-            p.rect_filled(row, 2.0, t.control_hover.gamma_multiply(0.5));
+    if !app.host_recent.is_empty() {
+        // Host mode: show files from the embedding page.
+        for (i, item) in app.host_recent.iter().enumerate() {
+            let row = Rect::from_min_size(pos2(main.left(), y), vec2((r.right() - main.left() - 36.0).clamp(0.0, 640.0), 42.0));
+            let resp = ui.interact(row, ui.id().with(("host_recent", i)), Sense::click());
+            if resp.hovered() {
+                p.rect_filled(row, 2.0, t.control_hover.gamma_multiply(0.5));
+            }
+            let clip = p.with_clip_rect(row.shrink(2.0));
+            clip.text(pos2(row.left() + 10.0, row.top() + 13.0), egui::Align2::LEFT_CENTER, &item.name, crate::theme::body(), t.text);
+            let subtitle = format_host_recent_subtitle(&item.updated, item.size);
+            clip.text(pos2(row.left() + 10.0, row.top() + 30.0), egui::Align2::LEFT_CENTER, &subtitle, crate::theme::small(), t.text_faint);
+            if resp.on_hover_text(&item.name).clicked() {
+                host_open_id = Some(item.id.clone());
+            }
+            y += 46.0;
         }
-        let dir = std::path::Path::new(path).parent().map(|d| d.display().to_string()).unwrap_or_default();
-        let clip = p.with_clip_rect(row.shrink(2.0));
-        clip.text(pos2(row.left() + 10.0, row.top() + 13.0), egui::Align2::LEFT_CENTER, crate::menus::file_name(path), crate::theme::body(), t.text);
-        clip.text(pos2(row.left() + 10.0, row.top() + 30.0), egui::Align2::LEFT_CENTER, dir, crate::theme::small(), t.text_faint);
-        if resp.on_hover_text(path).clicked() {
-            recent = Some(path.clone());
+    } else {
+        for (i, path) in app.ui.recent_files.iter().enumerate() {
+            let row = Rect::from_min_size(pos2(main.left(), y), vec2((r.right() - main.left() - 36.0).clamp(0.0, 640.0), 42.0));
+            let resp = ui.interact(row, ui.id().with(("recent", i)), Sense::click());
+            if resp.hovered() {
+                p.rect_filled(row, 2.0, t.control_hover.gamma_multiply(0.5));
+            }
+            let dir = std::path::Path::new(path).parent().map(|d| d.display().to_string()).unwrap_or_default();
+            let clip = p.with_clip_rect(row.shrink(2.0));
+            clip.text(
+                pos2(row.left() + 10.0, row.top() + 13.0),
+                egui::Align2::LEFT_CENTER,
+                crate::menus::file_name(path),
+                crate::theme::body(),
+                t.text,
+            );
+            clip.text(pos2(row.left() + 10.0, row.top() + 30.0), egui::Align2::LEFT_CENTER, dir, crate::theme::small(), t.text_faint);
+            if resp.on_hover_text(path).clicked() {
+                recent = Some(path.clone());
+            }
+            y += 46.0;
         }
-        y += 46.0;
     }
-    if let Some(path) = recent {
+    if let Some(id) = host_open_id {
+        app.request_open(&id);
+    } else if let Some(path) = recent {
         app.open_path(&path);
-    } else if app.ui.recent_files.is_empty() {
+    } else if app.ui.recent_files.is_empty() && app.host_recent.is_empty() {
         p.text(
             pos2(main.center().x, main.center().y),
             egui::Align2::CENTER_CENTER,
@@ -597,6 +625,33 @@ pub fn start_page(app: &mut CadApp, ui: &mut egui::Ui) {
             app.start("ui.sample");
         }
         _ => {}
+    }
+}
+
+/// Format the subtitle for a host recent item: date and optional file size.
+fn format_host_recent_subtitle(updated: &str, size: Option<u64>) -> String {
+    let date = if updated.is_empty() {
+        String::new()
+    } else {
+        // Show only the date part of an ISO 8601 string (before 'T').
+        updated.split('T').next().unwrap_or(updated).to_string()
+    };
+    match (date.is_empty(), size) {
+        (true, None) => String::new(),
+        (false, None) => date,
+        (true, Some(s)) => format_file_size(s),
+        (false, Some(s)) => format!("{date} - {}", format_file_size(s)),
+    }
+}
+
+/// Human-readable file size.
+fn format_file_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
     }
 }
 

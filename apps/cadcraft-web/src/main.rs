@@ -28,7 +28,12 @@ mod web {
     /// The app, the files File > Open… and drag and drop read for it in the background, the
     /// page embedding it (`?host=parent`), and the browser's `prefers-reduced-motion` (it stays
     /// live, so View ▸ Accessibility ▸ Animation Effects ▸ Use System Setting follows a change).
-    struct Shell(CadApp, crate::upload::Inbox, Option<(crate::host::Bridge, crate::host::DirtyReport)>, Option<web_sys::MediaQueryList>);
+    struct Shell(
+        CadApp,
+        crate::upload::Inbox,
+        Option<(crate::host::Bridge, crate::host::DirtyReport, crate::host::ActiveReport)>,
+        Option<web_sys::MediaQueryList>,
+    );
 
     impl eframe::App for Shell {
         fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -36,8 +41,9 @@ mod web {
             self.1.drain(&mut self.0);
             self.0.system_animations = self.3.as_ref().map(|reduced| !reduced.matches());
             self.0.logic(ctx);
-            if let Some((bridge, reported)) = &self.2 {
-                bridge.report_dirty(&self.0, reported);
+            if let Some((bridge, dirty_reported, active_reported)) = &self.2 {
+                bridge.report_dirty(&self.0, dirty_reported);
+                bridge.report_active(&self.0, active_reported);
             }
         }
         fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
@@ -54,8 +60,9 @@ mod web {
         }
         fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
             self.0.ui(ui);
-            if let Some((bridge, reported)) = &self.2 {
-                bridge.report_dirty(&self.0, reported);
+            if let Some((bridge, dirty_reported, active_reported)) = &self.2 {
+                bridge.report_dirty(&self.0, dirty_reported);
+                bridge.report_active(&self.0, active_reported);
             }
         }
     }
@@ -172,10 +179,16 @@ mod web {
                             picker.pick();
                             None
                         }));
+                        if let Some(bridge) = &app_bridge {
+                            let bridge = bridge.clone();
+                            app.on_request_open = Some(Box::new(move |id: &str| {
+                                bridge.post_request_open(id);
+                            }));
+                        }
                         let host = app_bridge.map(|bridge| {
                             bridge.listen(inbox.clone());
                             bridge.post_ready();
-                            (bridge, crate::host::DirtyReport::default())
+                            (bridge, crate::host::DirtyReport::default(), crate::host::ActiveReport::default())
                         });
                         let reduced_motion = web_sys::window().and_then(|w| w.match_media("(prefers-reduced-motion: reduce)").ok().flatten());
                         Ok(Box::new(Shell(app, inbox, host, reduced_motion)))
