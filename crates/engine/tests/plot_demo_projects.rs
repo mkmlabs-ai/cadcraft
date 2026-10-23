@@ -17,10 +17,16 @@ fn demo_projects_layouts_plot_to_pdf_without_manual_plotter_change() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut tested_count = 0;
     for name in demo_dirs {
-        let path = manifest_dir.join(format!("../../../../demo/projects/{name}/{name}.dxf"));
-        if !path.exists() {
+        let path = [
+            manifest_dir.join(format!("../../../../demo/projects/{name}/{name}.dxf")),
+            manifest_dir.join(format!("../../../corecad/demo/projects/{name}/{name}.dxf")),
+            manifest_dir.join(format!("../../demo/projects/{name}/{name}.dxf")),
+        ]
+        .into_iter()
+        .find(|p| p.exists());
+        let Some(path) = path else {
             continue;
-        }
+        };
         let bytes = std::fs::read(&path).expect("read demo dxf");
         let doc = cadcraft_io::read_dxf(&bytes).expect("parse demo dxf");
 
